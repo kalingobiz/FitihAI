@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="am">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ፍትህ AI · Fitih AI</title>
+  <meta name="description" content="Ethiopian law in plain language — Amharic, Afaan Oromo, Tigrinya, English.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Noto+Sans:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">⚖</span>
+      <div>
+        <h1>ፍትህ AI <small>Fitih AI</small></h1>
+        <p class="tag">ፍትህ ለሁሉም · Justice for everyone</p>
+      </div>
+    </div>
+    <select id="lang" aria-label="Language"></select>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" class="tab active" data-tab="ask" id="tab-ask">💬 <span data-i18n="tab_ask">Ask</span></button>
+    <button role="tab" class="tab" data-tab="doc" id="tab-doc">📄 <span data-i18n="tab_doc">Document</span></button>
+  </nav>
+
+  <main>
+    <section id="panel-ask" class="panel active">
+      <div id="chat" class="chat" aria-live="polite"></div>
+      <form id="ask-form" class="composer">
+        <textarea id="question" rows="2" required minlength="2" maxlength="4000"></textarea>
+        <button type="submit" class="primary" id="ask-btn">➤</button>
+      </form>
+      <button id="new-chat" class="link" type="button" data-i18n="new_chat">New conversation</button>
+    </section>
+
+    <section id="panel-doc" class="panel">
+      <form id="doc-form" class="upload">
+        <label class="drop" for="file">
+          <input type="file" id="file" accept="image/jpeg,image/png,image/webp,application/pdf,text/plain" required>
+          <span class="drop-icon">📷</span>
+          <span data-i18n="drop">Photo, scan or PDF of your document</span>
+          <img id="preview" alt="" hidden>
+          <span id="file-name" class="muted"></span>
+        </label>
+        <button type="submit" class="primary wide" id="doc-btn" data-i18n="analyze">Analyse document</button>
+        <p class="muted small" data-i18n="privacy">Your document is processed and discarded. It is not stored.</p>
+      </form>
+      <div id="analysis"></div>
+    </section>
+  </main>
+
+  <footer class="foot muted small">
+    <span id="disclaimer"></span>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
