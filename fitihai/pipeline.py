@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from datetime import date, timedelta
 
 from .config import Settings
 from .corpus.store import ArticleRecord, CorpusStore
-from .ethiopian_calendar import ethiopian_to_gregorian, format_ethiopian, gregorian_to_ethiopian
+from .ethiopian_calendar import (
+    ethiopian_time_to_24h, ethiopian_to_gregorian, format_ethiopian, gregorian_to_ethiopian,
+)
 from .i18n import LANGUAGE_NAMES_EN, disclaimer
 from .llm import LegalModel
 from .prompts import format_excerpts, language_instruction
@@ -19,6 +22,7 @@ from .sessions import Session, SessionStore
 
 MAX_DOCUMENT_CHARS = 60_000
 CANDIDATES = 30  # per retriever, before fusion
+RELOAD_CHECK_SECONDS = 15  # how often to look for newly approved laws
 
 log = logging.getLogger("fitihai.pipeline")
 
@@ -36,9 +40,11 @@ class Advisor:
         self.embedder = embedder
         self.sessions = SessionStore(settings.session_ttl_minutes, settings.max_history_turns)
         self._index_lock = threading.Lock()
+        self._last_check = 0.0
         self.reload_index()
 
     def reload_index(self) -> None:
+        version = self.store.corpus_version()
         articles = self.store.all_articles()
         index = BM25Index(articles)
         vectors = load_vector_index(self.store, self.embedder, articles) if self.embedder else VectorIndex([], [])
@@ -46,6 +52,20 @@ class Advisor:
             self.index = index
             self.vectors = vectors
             self._by_id = {a.id: a for a in articles}
+            self._version = version
+        self._last_check = time.monotonic()
+
+    def refresh_if_changed(self) -> bool:
+        """Reload when another process (admin console, CLI) has loaded new laws."""
+        now = time.monotonic()
+        if now - self._last_check < RELOAD_CHECK_SECONDS:
+            return False
+        self._last_check = now
+        if self.store.corpus_version() == self._version:
+            return False
+        log.info("corpus changed; reloading index")
+        self.reload_index()
+        return True
 
     # ---- shared helpers -------------------------------------------------------------
     def _retrieve(self, queries: list[str], domain: str, jurisdiction: str,
@@ -93,14 +113,25 @@ class Advisor:
         return user_hash
 
     # ---- Q&A ---------------------------------------------------------------------
-    def ask(self, question: str, session_id: str | None = None, language: str | None = None) -> AskResponse:
-        session = self.sessions.get(session_id, language)
-        lang_name = LANGUAGE_NAMES_EN[session.language]
-
-        route = self.model.route(question, session.history)
+    def find_articles(self, question: str, history: list[dict] | None = None):
+        """Route a question and retrieve the articles that will be shown to the model."""
+        self.refresh_if_changed()
+        route = self.model.route(question, history or [])
         queries = [question, *route.search_queries_en, *route.search_queries_am]
         articles = (self._retrieve(queries, route.domain, route.jurisdiction, question)
                     if route.is_legal_question else [])
+        return route, articles
+
+    def ask(self, question: str, session_id: str | None = None, language: str | None = None) -> AskResponse:
+        return self.ask_traced(question, session_id, language)[0]
+
+    def ask_traced(self, question: str, session_id: str | None = None,
+                   language: str | None = None) -> tuple[AskResponse, list[ArticleRecord]]:
+        """Like ``ask``, but also returns the articles that were retrieved (used by evaluation)."""
+        session = self.sessions.get(session_id, language)
+        lang_name = LANGUAGE_NAMES_EN[session.language]
+
+        route, articles = self.find_articles(question, session.history)
 
         user_content = (
             f"{format_excerpts(articles)}\n\n"
@@ -112,7 +143,7 @@ class Advisor:
         citations = self._citations(result.cited_article_ids, articles)
         self.sessions.append(session, question, result.answer)
 
-        return AskResponse(
+        response = AskResponse(
             session_id=session.id,
             language=session.language,
             domain=route.domain,
@@ -123,6 +154,7 @@ class Advisor:
             urgent=route.urgent,
             disclaimer=disclaimer(session.language),
         )
+        return response, articles
 
     # ---- document analysis ---------------------------------------------------------
     def analyze_document(
@@ -133,6 +165,7 @@ class Advisor:
         language: str | None = None,
         user_key: str | None = None,
     ) -> AnalyzeResponse:
+        self.refresh_if_changed()
         user_hash = self.check_quota(user_key, "analysis")
         session = self.sessions.get(session_id, language)
         lang_name = LANGUAGE_NAMES_EN[session.language]
@@ -203,4 +236,15 @@ def resolve_deadline(d: Deadline, today: date | None = None) -> DeadlineOut:
             out.ethiopian_date = format_ethiopian(*gregorian_to_ethiopian(g))
     except ValueError:
         pass  # implausible date from OCR; leave as written
+    try:
+        if d.clock == "ethiopian" and d.hour >= 1:
+            if d.period == "unknown":
+                out.time_24h = ethiopian_time_to_24h(d.hour, d.minute, "day")
+                out.time_note = "assumed daytime; check the document"
+            else:
+                out.time_24h = ethiopian_time_to_24h(d.hour, d.minute, d.period)
+        elif d.clock == "international" and 0 <= d.hour <= 23 and 0 <= d.minute <= 59:
+            out.time_24h = f"{d.hour:02d}:{d.minute:02d}"
+    except ValueError:
+        pass  # implausible time from OCR; leave as written
     return out

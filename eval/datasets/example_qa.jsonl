@@ -1,0 +1,5 @@
+// Example only. Runs against the FICTIONAL test laws in tests/fixtures (not real law).
+// Build the real set with your lawyers: see eval/README.md.
+{"id": "ex-q1", "language": "en", "question": "My employer dismissed me without good cause. Am I owed anything?", "expected_articles": ["test-labour:3"], "in_corpus": true}
+{"id": "ex-q2", "language": "am", "question": "አሠሪዬ ያለ ማስጠንቀቂያ አሰናበተኝ። መብቴ ምንድን ነው?", "expected_articles": ["test-labour:2", "test-labour:3"], "in_corpus": true}
+{"id": "ex-q3", "language": "en", "question": "What is the penalty for tax evasion?", "expected_articles": [], "in_corpus": false}

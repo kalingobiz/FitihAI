@@ -21,7 +21,8 @@ analysis, message formatting and splitting, and user-facing errors.
 | User action | Bot behaviour |
 |---|---|
 | `/start` or `/lang` | Shows buttons for አማርኛ · Afaan Oromoo · ትግርኛ · English |
-| Tap a language | Saves it for this user and shows the welcome message in that language |
+| Tap a language | Saves it for this user, shows the welcome message and the privacy notice in that language |
+| `/privacy` | The privacy notice (AI provider, what is kept) |
 | `/new` | Clears the conversation ("Nothing from it is kept.") |
 | Text message | Legal Q&A (module 04) → answer, sources, disclaimer |
 | Photo | Document analysis (largest photo size) |
@@ -47,7 +48,9 @@ update ─► handler ─► asyncio.to_thread(advisor.ask / advisor.analyze_doc
     **⏰ Deadlines** (as written → Gregorian), **❓ Questions to ask a lawyer**,
     **Sources**, *disclaimer*.
 - **Splitting:** Telegram's limit is 4,096 characters, so messages are split at
-  4,000 on line boundaries (very long lines are cut hard).
+  4,000 on line boundaries, keeping the order. Very long lines are cut hard.
+- **New laws:** the bot shares the database with the web server and reloads its index
+  within 15 seconds of **Publish changes** (module 01).
 - The downloaded file bytes are deleted (`del data`) as soon as the analysis finishes.
 
 ## 6. Configuration
@@ -77,15 +80,18 @@ The bot runs as a separate process from the web server (`bot:` line in the `Proc
 | Missing token at start-up | Process exits with "Set TELEGRAM_BOT_TOKEN" |
 
 ## 9. Testing
-There are no automated bot tests yet. The formatting functions (`format_answer`,
-`format_analysis`, `_chunks`) are pure and easy to unit-test. Adding those tests is
-the next step. Manual test script:
+`tests/test_product.py`: `test_telegram_answer_is_escaped` (HTML in AI output is
+escaped), `test_telegram_analysis_formatting` (🔴 icons, E.C. date and Ethiopian time →
+Gregorian and 24-hour), `test_telegram_chunks_respect_limit`. That last test found and
+fixed a bug where a very long line was sent ahead of the text before it.
+`test_other_process_changes_are_picked_up` covers reloading after publish. Manual test script:
 1. `/start` → pick አማርኛ → welcome message in Amharic.
 2. Ask a labour question → answer + sources + Amharic disclaimer.
 3. Ask a follow-up → it uses context.
 4. Send a photo of a sample contract → 🔴🟡🟢 analysis.
 5. `/new` → confirmation; the next question has no context.
-6. Send a voice note → "not supported" message.
+6. `/privacy` → the privacy notice.
+7. Send a voice note → "not supported" message.
 
 ## 10. Limitations and next steps
 - The language preference is lost on restart. Consider persisting it (it is not

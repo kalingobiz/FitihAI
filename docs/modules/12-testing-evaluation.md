@@ -23,7 +23,11 @@ datasets, metrics, targets, and the process.
 | `tests/fixtures/*.md` | Two **fictional** laws (English labour, Amharic land lease) |
 | `pytest.ini` | Test paths and import path |
 | `.github/workflows/ci.yml` | CI: `pytest` on Python 3.11 and 3.12 for each PR and push to `main` (no API keys needed) |
-| `eval/` (to create) | Evaluation datasets and scoring scripts |
+| `tests/test_importer.py` | Gazette importer, cross-references, numbering checks, approve |
+| `tests/test_product.py` | Admin console, rate limits, quotas, consent/privacy, Ethiopian time, auto-reload, Telegram formatting, evaluation, running without an AI key |
+| `fitihai/evaluation.py` | Evaluation metrics, report, lawyer grading sheet |
+| `eval/README.md` | How to build the datasets with lawyers, metrics, targets |
+| `eval/datasets/example_*.jsonl` | Format examples (run against the fictional test laws) |
 
 ## 4. Interfaces
 ```bash
@@ -31,7 +35,7 @@ pytest            # all tests (about 1 second)
 pytest -k gemini  # a subset
 ```
 
-**Automated test coverage (28 tests)**
+**Automated test coverage (64 tests)**
 | Area | Tests |
 |---|---|
 | Corpus (01) | Ge'ez numerals; English and Amharic headings; front-matter validation; ingest counts |
@@ -39,9 +43,14 @@ pytest -k gemini  # a subset
 | Providers (03) | Gemini request shape and schema; JSON fallback; safety block → refusal; history roles; OCR type check; provider switch |
 | Q&A (04) | Invented citations removed; session history; "not found" when no valid citation |
 | Documents (05) | OCR call; clause sorting; clause citation filtering; E.C. deadline; quota |
-| Calendar (06) | New Year dates; Pagume leap rule |
+| Calendar (06) | New Year dates; Pagume leap rule; Ethiopian time day/night; out-of-range values |
 | Languages (07) | Disclaimer exists for every language; correct language per response |
-| API (09) | Ask; analyse text; bad file type; health; index page |
+| API (09) | Ask; analyse text; bad file type; health; index page; rate limit; web quota per client; consent and privacy pages |
+| Admin (01, 09) | Disabled without token; wrong token; full import → approve → publish → edit → repeal workflow; delete and prune; input validation |
+| Importer (01) | Gazette cleaning; drafts not searchable; approval; real PDF; scanned PDF rejected; cross-references; numbering |
+| Telegram (10) | Escaping; analysis formatting with times; message splitting order |
+| Evaluation (12) | Metrics on the example datasets; report and grading sheet; errors recorded, not skipped |
+| Operations (11) | Web/bot index reload after publish; app works without an AI key |
 
 The fakes let tests check *what the pipeline does with* model output (for example,
 that it removes invented citations) without paying for API calls or depending on
@@ -69,6 +78,16 @@ model behaviour.
 | OCR character error rate | Per provider (Gemini vs Claude) | Pick the best; aim for < 5% on printed text |
 | Language quality | Native-speaker fluency rating 1–5, per language | ≥ 4.0 (below that, the language stays "beta") |
 
+### Running it
+```bash
+python -m fitihai.cli eval eval/datasets/qa.jsonl eval/datasets/documents.jsonl --label gemini-flash
+```
+Each run writes `eval/results/<time>-<label>/` containing `report.md` (metrics against
+targets, ✅/❌), `grading.csv` (one row per item for lawyers: grade, harmful, notes),
+`results.jsonl` (retrieved and cited articles, outputs, errors) and `summary.json`.
+Failures are recorded as errors, never skipped. The dataset format and how to build it
+are in `eval/README.md`.
+
 ### Process
 1. Run the evaluation with automatic metrics (recall, deadlines, CER).
 2. Lawyers grade a sample (all harmful-risk categories, plus a random 30%).
@@ -94,13 +113,11 @@ Tests fail loudly with pytest output. Evaluation scripts should record errors
 (provider failures, refusals) as their own category, not silently skip them.
 
 ## 9. Testing
-This module *is* the testing strategy. The suite currently passes: 28 tests in
-about 1 second.
+This module *is* the testing strategy. The suite currently passes: 64 tests in about 2 seconds.
 
 ## 10. Limitations and next steps
 - **No live-API test has been run yet.** First step: one question and one document
   with a real Gemini key.
-- Add unit tests for the Telegram formatting (`format_answer`, `format_analysis`, `_chunks`).
 - Add a small set of browser tests (Playwright) for the web client.
-- Build the `eval/` datasets and scoring scripts. This is the main Phase 1
-  deliverable, together with the corpus.
+- Build the real evaluation datasets with the legal lead (the tool is ready). This is the
+  main Phase 1 deliverable, together with the corpus.

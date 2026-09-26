@@ -23,6 +23,8 @@ the whole system.
 | File | Role |
 |---|---|
 | `fitihai/corpus/chunker.py` | Front-matter parser, article splitter, Ge'ez numeral conversion |
+| `fitihai/admin.py` | Admin console API: the same workflow in the browser (see module 09) |
+| `web/admin.html`, `web/admin.js` | Admin console page (`/admin`) |
 | `fitihai/corpus/importer.py` | Gazette PDF/text → draft corpus file; `approve` records the reviewer |
 | `fitihai/corpus/store.py` | `CorpusStore`: SQLite schema, ingest, queries, embedding cache, usage counters |
 | `fitihai/cli.py` | `ingest`, `embed`, `laws`, `search` commands |
@@ -96,6 +98,16 @@ python -m fitihai.cli search "severance pay" -k 5
    amended text never lives next to the old text.
 6. **Only in-force law is searchable.** `all_articles()` filters on `status`.
 
+**Corpus version and auto-reload.** Every ingest stores a new *corpus version* in the
+database (`meta` table). The web server and the Telegram bot each check it at most every
+15 seconds and reload their search index when it changes, so a law published from the
+admin console reaches both channels without a restart. SQLite runs in WAL mode so both
+processes can share the file. A lock serialises access within a process.
+
+**Prune.** Loading the main corpus folder (`ingest` with no directory, or **Publish
+changes** in the admin console) mirrors the folder exactly: laws whose file was deleted
+are removed from the index.
+
 **Import and review workflow**
 ```
 gazette PDF ─► import (strip page headers/footers and page numbers, keep one language,
@@ -103,6 +115,12 @@ gazette PDF ─► import (strip page headers/footers and page numbers, keep one
             ─► reviewer checks each article against the gazette, fixes errors
             ─► approve --by <name> ─► status: in_force + reviewed_by/on ─► ingest --embed
 ```
+The admin console (`/admin`) runs the same workflow in the browser: **Import** →
+**Review** (numbering checks, article list, editable text) → **Approve** (reviewer name
+plus a confirmation that every article was compared with the gazette) → **Publish
+changes**. The server enforces the rules, not the page. Any edit to a law's text resets
+it to draft and clears the approval. Only drafts can be deleted, and approved laws are
+repealed instead, so there is always a record.
 Bilingual gazettes print Amharic and English side by side. Importing with
 `--language en` drops lines that are mostly Ge'ez script, and `--language am`
 drops lines that are mostly Latin script. Each language becomes its own file.

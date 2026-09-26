@@ -44,7 +44,9 @@ class FakeModel:
                        cited_article_ids=["test-labour:3", "ghost:1"]),
             ],
             deadlines=[Deadline(description="Sign by", date_as_written="መስከረም 16 2019", calendar="ethiopian",
-                                year=2019, month=1, day=16, relative_days=0)],
+                                year=2019, month=1, day=16, relative_days=0,
+                                time_as_written="ከጠዋቱ 3 ሰዓት", clock="ethiopian", hour=3, minute=0,
+                                period="day")],
             lawyer_questions=["Is this legal?"], legibility="good",
         )
 

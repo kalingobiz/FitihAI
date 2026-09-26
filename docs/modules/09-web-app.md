@@ -13,7 +13,10 @@ upload, analysis view, language switch, print/save).
 ## 3. Files
 | File | Role |
 |---|---|
-| `fitihai/api.py` | `create_app()`, endpoints, `get_advisor()` (one shared `Advisor`) |
+| `fitihai/api.py` | `create_app()`, endpoints, pages, rate limiting, `get_advisor()` (one shared `Advisor`) |
+| `fitihai/admin.py` | Admin API (`/api/admin/*`) |
+| `web/admin.html`, `web/admin.js` | Admin console: sign in, library table, import, review/edit, approve, repeal, delete, publish |
+| `web/privacy.html` | Privacy page template (provider and session length filled in by the server) |
 | `web/index.html` | Page layout: header, language select, Ask/Document tabs |
 | `web/app.js` | Client logic, web-only labels in 4 languages, safe DOM rendering |
 | `web/style.css` | Mobile-first styles, light and dark themes, print styles |
@@ -24,12 +27,29 @@ upload, analysis view, language switch, print/save).
 |---|---|---|
 | `GET /` | — | Web client |
 | `GET /static/*` | — | CSS/JS |
-| `GET /api/health` | — | `{status, provider, articles_indexed, articles_embedded}` |
-| `GET /api/meta` | — | `{languages, ui, disclaimer}` |
-| `GET /api/laws` | — | List of laws with article counts |
+| `GET /api/health` | — | `{status, provider, ai_key_configured, articles_indexed, articles_embedded}` |
+| `GET /admin` | — | Admin console |
+| `GET /privacy` | — | Privacy page |
+| `GET /api/meta` | — | `{languages, ui, disclaimer, consent, provider}` |
+| `GET /api/laws` | — | Laws **in force**, with article counts |
 | `POST /api/ask` | JSON `{question (2–4000 chars), language?, session_id?}` | `AskResponse` (module 04) |
 | `POST /api/analyze` | multipart `file`, `language?`, `session_id?` | `AnalyzeResponse` (module 05) |
 | `DELETE /api/session/{id}` | — | `{cleared: true}` |
+
+**Admin API.** Every call needs `Authorization: Bearer <FITIH_ADMIN_TOKEN>`. It returns
+404 when the token is not configured and 401 when it is wrong.
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/admin/laws` | Every law file: status, reviewer, article count, numbering checks, whether it is live |
+| `POST /api/admin/import` | multipart `file` + `id, title, domain, language, proclamation, year, jurisdiction, source, overwrite` → draft |
+| `GET /api/admin/laws/{id}` | Full text, article list, checks |
+| `PUT /api/admin/laws/{id}` | Save edited text (validated; resets to draft) |
+| `POST /api/admin/laws/{id}/approve` | `{reviewer}` → in force |
+| `POST /api/admin/laws/{id}/repeal` | → repealed |
+| `DELETE /api/admin/laws/{id}` | Drafts only |
+| `GET /api/admin/laws/{id}/download` | The law file |
+| `POST /api/admin/publish` | Rebuild the index from the corpus folder, embed new articles, reload |
 
 Interactive API docs are generated automatically at `/docs` (FastAPI/OpenAPI).
 
@@ -62,6 +82,9 @@ curl -X POST localhost:8000/api/analyze -F file=@lease.jpg -F language=om
   nothing has to be stored on the server.
 - The language choice is remembered in `localStorage`, wrapped in try/catch so
   private browsing still works.
+- **Consent banner** on first use (see module 08) and a **Privacy** link in the footer.
+- **Deadlines** show the date and time as written, plus the Gregorian date and 24-hour
+  time. A ⚠ note appears when daytime had to be assumed.
 - **Safe rendering:** all text is inserted as text nodes (`el()` / `fill()`),
   never as HTML, so AI or document content cannot inject scripts.
 - No build step and no framework. The page works on low-end Android browsers. Fonts:
@@ -75,9 +98,10 @@ curl -X POST localhost:8000/api/analyze -F file=@lease.jpg -F language=om
 - Uploads are never stored (module 08).
 - Error responses never include stack traces or provider messages. Details are
   written only to the server log.
-- **Before public launch:** serve over HTTPS, add rate limiting (per IP) at the
-  reverse proxy, restrict CORS if the API is opened to partners, and add the AI
-  processing consent notice to the page.
+- Rate limiting per client is built in (module 08). The admin token is compared in
+  constant time, and law ids are validated, which prevents path tricks.
+- **Before public launch:** serve over HTTPS, use a long random `FITIH_ADMIN_TOKEN`, and
+  restrict CORS if the API is opened to partners.
 
 ## 8. Error handling
 | Status | When |
@@ -86,7 +110,9 @@ curl -X POST localhost:8000/api/analyze -F file=@lease.jpg -F language=om
 | 413 | File larger than the limit |
 | 415 | Type not JPEG/PNG/WebP/GIF/PDF/TXT |
 | 422 | Invalid request body, or the AI refused |
-| 429 | Monthly document quota reached |
+| 429 | Too many requests per minute, or monthly document quota reached |
+| 401 / 404 | Admin: wrong token / admin console disabled |
+| 409 / 422 | Admin: id already exists or law not a draft / text does not parse |
 | 502 | AI provider or network failure |
 
 The client shows the localised "something went wrong" text plus the server's
@@ -94,13 +120,23 @@ short message.
 
 ## 9. Testing
 `test_api_ask`, `test_api_analyze_rejects_bad_type`, `test_api_analyze_text`,
-`test_api_health_and_index_page` (FastAPI `TestClient` with the fake model).
+`test_api_health_and_index_page` (FastAPI `TestClient` with the fake model). Admin:
+`test_admin_disabled_without_token`, `test_admin_rejects_wrong_token`,
+`test_admin_full_workflow` (import → draft not searchable → approve → publish → live →
+edit resets to draft → repeal), `test_admin_delete_draft_and_prune`,
+`test_admin_validates_input` (path tricks, bad ids, domains, languages, file types).
+`test_app_works_without_ai_key`: the admin console, law list and health check work
+before an AI key is set.
+
+In headless Chromium: admin sign-in (wrong token rejected), import → review → approve
+→ publish, then on a phone the consent banner (Amharic), a question answered with a
+citation from the newly published law, the banner staying dismissed after reload, and
+the privacy page.
 The client was also exercised in headless Chromium at phone width (390 px): ask →
 answer with citations, and upload → colour-coded analysis.
 
 ## 10. Limitations and next steps
 - No streaming: users wait for the complete answer. Add server-sent events.
 - No accessibility audit yet (screen readers, contrast in all themes).
-- Add a consent banner and a privacy page.
 - An offline-capable PWA would help on unstable connections.
 - Add an NGO dashboard (usage by language and domain, with no content) for licensed partners.

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Law Library Admin · ፍትህ AI</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖</text></svg>">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Noto+Sans:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="admin">
+  <header class="top">
+    <div class="brand">
+      <span class="logo">⚖</span>
+      <div><h1>Law Library <small>ፍትህ AI admin</small></h1>
+        <p class="tag">Import → review → approve → publish</p></div>
+    </div>
+    <button id="logout" class="link" type="button" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <section id="login" class="card">
+      <h2>Sign in</h2>
+      <p class="muted small">Enter the admin token (the server's <code>FITIH_ADMIN_TOKEN</code>).</p>
+      <form id="login-form" class="row">
+        <input id="token" type="password" autocomplete="current-password" placeholder="Admin token" required>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <p id="login-msg" class="small"></p>
+    </section>
+
+    <div id="app" hidden>
+      <section class="card">
+        <div class="row between">
+          <div>
+            <h2>Library</h2>
+            <p class="muted small" id="summary"></p>
+          </div>
+          <button id="publish" class="primary" type="button">Publish changes</button>
+        </div>
+        <p class="small muted">Only <span class="badge in_force">in force</span> laws are searched and cited.
+          After approving, repealing or deleting, press <strong>Publish changes</strong>.</p>
+        <div class="table-wrap"><table id="laws">
+          <thead><tr><th>Law</th><th>Lang</th><th>Status</th><th>Articles</th><th>Checks</th><th>Live</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p id="empty" class="muted small" hidden>No laws yet. Import the first one below.</p>
+      </section>
+
+      <section id="review" class="card" hidden>
+        <div class="row between">
+          <h2 id="rv-title"></h2>
+          <button class="link" type="button" id="rv-close">Close</button>
+        </div>
+        <p class="small muted" id="rv-meta"></p>
+        <div id="rv-issues"></div>
+        <details>
+          <summary>Articles (<span id="rv-count"></span>)</summary>
+          <ol id="rv-articles" class="articles"></ol>
+        </details>
+        <h3>Text</h3>
+        <p class="small muted">Compare every article with the official gazette. Saving any change puts the law back
+          to <span class="badge draft">draft</span> until it is approved again.</p>
+        <textarea id="rv-content" rows="18" spellcheck="false"></textarea>
+        <div class="row wrap">
+          <button id="rv-save" type="button">Save changes</button>
+          <a id="rv-download" class="button" href="#">Download file</a>
+          <button id="rv-repeal" type="button" class="warn">Mark repealed</button>
+          <button id="rv-delete" type="button" class="danger-btn">Delete draft</button>
+        </div>
+        <form id="approve-form" class="approve">
+          <h3>Approve</h3>
+          <label class="check"><input type="checkbox" id="rv-confirm" required>
+            I compared every article with the official gazette and the text is correct.</label>
+          <div class="row">
+            <input id="rv-reviewer" placeholder="Reviewer's full name (licensed lawyer)" required minlength="2">
+            <button class="primary" type="submit">Approve</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Import a law</h2>
+        <p class="small muted">Upload the official Negarit Gazette PDF (with a text layer) or a text export.
+          Bilingual gazettes: import once per language (e.g. <code>…-am</code> and <code>…-en</code>).</p>
+        <form id="import-form" class="grid">
+          <label class="span2">Gazette file (PDF, .txt or .md)<input type="file" name="file" accept=".pdf,.txt,.md" required></label>
+          <label>Law id<input name="id" required pattern="[a-z0-9][a-z0-9_\-]{1,80}" placeholder="labour-1156-2019-en"></label>
+          <label>Title<input name="title" required placeholder="Labour Proclamation"></label>
+          <label>Proclamation no.<input name="proclamation" placeholder="1156/2019"></label>
+          <label>Year<input name="year" placeholder="2019"></label>
+          <label>Domain<select name="domain" required>
+            <option value="labor">Labour</option><option value="land">Land</option>
+            <option value="family">Family</option><option value="commercial">Commercial</option>
+            <option value="criminal">Criminal</option><option value="civil_procedure">Civil procedure</option>
+            <option value="tax">Tax</option><option value="administrative">Administrative</option>
+            <option value="other">Other</option></select></label>
+          <label>Language<select name="language" required>
+            <option value="en">English</option><option value="am">አማርኛ</option>
+            <option value="om">Afaan Oromoo</option><option value="ti">ትግርኛ</option></select></label>
+          <label>Jurisdiction<input name="jurisdiction" value="federal"></label>
+          <label>Source<input name="source" placeholder="Federal Negarit Gazette, year/no., pages"></label>
+          <label class="check span2"><input type="checkbox" name="overwrite" value="true"> Replace an existing law with the same id</label>
+          <button class="primary span2" type="submit">Import as draft</button>
+        </form>
+      </section>
+    </div>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="/static/admin.js"></script>
+</body>
+</html>

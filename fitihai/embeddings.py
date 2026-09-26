@@ -47,7 +47,14 @@ class GeminiEmbedder:
         self._types = types
         self.model = settings.embedding_model
         self.dim = settings.embedding_dim
-        self.client = client or genai.Client(http_options=types.HttpOptions(retry_options=RETRY))
+        self._genai, self._retry = genai, RETRY
+        self._client = client
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = self._genai.Client(http_options=self._types.HttpOptions(retry_options=self._retry))
+        return self._client
 
     def _embed(self, texts: Sequence[str], task_type: str) -> list[list[float]]:
         out: list[list[float]] = []

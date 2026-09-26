@@ -34,7 +34,7 @@ Accepted types: JPEG, PNG, WebP, GIF, PDF, plain text. Maximum 10 MB by default.
 | `document_type`, `domain`, `title` | e.g. `eviction_notice`, `land` |
 | `summary`, `parties[]` | Plain-language summary and who is involved |
 | `clauses[]` | `{quote, explanation, severity: danger/attention/standard, cited_article_ids}`, sorted most severe first |
-| `deadlines[]` | `{description, date_as_written, calendar, year, month, day, relative_days, gregorian_date, ethiopian_date}` |
+| `deadlines[]` | `{description, date_as_written, calendar, year, month, day, relative_days, time_as_written, clock, hour, minute, period, gregorian_date, ethiopian_date, time_24h, time_note}` |
 | `lawyer_questions[]` | Questions to ask before signing or responding |
 | `legibility` | `good` / `partial` / `poor`; the clients ask for a clearer photo if not good |
 | `citations[]` | Verified citations, as in module 04 |
@@ -51,7 +51,7 @@ Accepted types: JPEG, PNG, WebP, GIF, PDF, plain text. Maximum 10 MB by default.
 7. result = model.analyze(prompt)
 8. keep only citations to retrieved articles; strip invalid IDs from each clause
 9. sort clauses: danger → attention → standard
-10. resolve deadlines to both calendars (module 06)
+10. resolve deadlines to both calendars, and Ethiopian time to 24-hour time (module 06)
 11. add a one-line summary to session history, so follow-up questions work
 12. increment the usage counter; return response + disclaimer
 ```
@@ -66,8 +66,10 @@ Accepted types: JPEG, PNG, WebP, GIF, PDF, plain text. Maximum 10 MB by default.
 The model is told to focus on clauses that matter, not to list all boilerplate,
 and to quote a short verbatim excerpt for each clause so the user can find it.
 
-**Deadlines:** the model records the date *as written*, with the calendar and
-numeric parts, and is told **not** to convert it. Code converts it
+**Deadlines:** the model records the date *and time* as written, with the calendar,
+clock (Ethiopian or international) and numeric parts, and is told **not** to convert them.
+For example, "ከጠዋቱ 3 ሰዓት" is recorded as clock=ethiopian, hour=3, period=day, and code
+turns it into 09:00. Code converts it
 deterministically (module 06). A relative window ("within 15 days") is not turned
 into a date, because the starting day (the day of receipt) is unknown.
 

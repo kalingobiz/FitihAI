@@ -55,7 +55,18 @@
 
   <footer class="foot muted small">
     <span id="disclaimer"></span>
+    <p><a id="privacy-link" href="/privacy">Privacy</a></p>
   </footer>
+
+  <div id="consent" class="consent" role="dialog" aria-live="polite" hidden>
+    <div>
+      <p id="consent-text"></p>
+      <div class="row">
+        <button id="consent-ok" class="primary" type="button">I understand</button>
+        <a id="consent-privacy" href="/privacy">Privacy</a>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

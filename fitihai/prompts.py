@@ -46,7 +46,9 @@ For the document:
   Quote a short verbatim excerpt for each clause. Do not list every boilerplate clause; focus on what matters.
 - extract every date, deadline, hearing date and response window. Ethiopian documents usually use the Ethiopian
   calendar (ዓ.ም / E.C.); record the calendar and the numeric year/month/day as written (month 1 = መስከረም … 13 = ጳጉሜ).
-  Do not convert dates yourself.
+  Record any time of day as written too. Ethiopian time counts hours from 6 a.m. and 6 p.m.: "ከጠዋቱ 3 ሰዓት" is
+  clock=ethiopian, hour=3, period=day; "ከምሽቱ 2 ሰዓት" is clock=ethiopian, hour=2, period=night.
+  Do not convert dates or times yourself; the application does that.
 - suggest concrete questions to ask a lawyer before signing or responding;
 - rate legibility of the transcription (good / partial / poor). If poor, say which parts could not be read.
 

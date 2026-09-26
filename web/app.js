@@ -55,6 +55,20 @@ function applyLanguage() {
   document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = L(n.dataset.i18n); });
   $("#question").placeholder = L("placeholder");
   $("#disclaimer").textContent = state.meta?.disclaimer?.[state.lang] || "";
+  $("#privacy-link").textContent = U("privacy");
+  const banner = $("#consent");
+  if (banner && !banner.hidden) {
+    $("#consent-text").textContent = state.meta?.consent?.[state.lang] || state.meta?.consent?.en || "";
+    $("#consent-ok").textContent = U("consent_ok");
+    $("#consent-privacy").textContent = U("privacy");
+  }
+}
+
+function showConsentIfNeeded() {
+  if (localGet("fitih.consent") === "1") return;
+  $("#consent").hidden = false;
+  applyLanguage();
+  $("#consent-ok").addEventListener("click", () => { localSet("fitih.consent", "1"); $("#consent").hidden = true; }, { once: true });
 }
 
 async function init() {
@@ -77,6 +91,7 @@ async function init() {
   $("#new-chat").addEventListener("click", onNewChat);
   $("#file").addEventListener("change", onFilePicked);
   $("#doc-form").addEventListener("submit", onAnalyze);
+  showConsentIfNeeded();
 }
 
 function citationsBlock(citations) {
@@ -177,7 +192,10 @@ function renderAnalysis(d) {
       el("div", {}, c.explanation),
     ))] : null,
     d.deadlines.length ? [el("h3", {}, `⏰ ${U("deadlines")}`), el("ul", {}, d.deadlines.map((x) => el("li", {},
-      el("strong", {}, x.date_as_written), x.gregorian_date ? ` (${x.gregorian_date})` : "", ` — ${x.description}`)))] : null,
+      el("strong", {}, [x.date_as_written, x.time_as_written].filter(Boolean).join(", ")),
+      x.gregorian_date || x.time_24h ? ` (${[x.gregorian_date, x.time_24h].filter(Boolean).join(" ")})` : "",
+      ` — ${x.description}`,
+      x.time_note ? el("span", { class: "time-note small" }, ` ⚠ ${x.time_note}`) : null)))] : null,
     d.lawyer_questions.length ? [el("h3", {}, `❓ ${U("ask_lawyer")}`), el("ul", {}, d.lawyer_questions.map((q) => el("li", {}, q)))] : null,
     citationsBlock(d.citations),
     el("div", { class: "disc" }, d.disclaimer),

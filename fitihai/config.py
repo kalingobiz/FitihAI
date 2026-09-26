@@ -64,5 +64,12 @@ class Settings:
 
     telegram_token: str = field(default_factory=lambda: os.environ.get("TELEGRAM_BOT_TOKEN", ""))
 
+    # Admin console (/admin). Empty = admin console disabled.
+    admin_token: str = field(default_factory=lambda: os.environ.get("FITIH_ADMIN_TOKEN", ""))
+    # Requests per minute per client for /api/ask and /api/analyze. 0 = no limit.
+    rate_limit_per_minute: int = field(default_factory=lambda: _int("FITIH_RATE_LIMIT_PER_MINUTE", 20))
+    # Behind a reverse proxy (Railway, Render, nginx) set to 1 so X-Forwarded-For identifies clients.
+    trust_proxy: bool = field(default_factory=lambda: os.environ.get("FITIH_TRUST_PROXY", "0") == "1")
+
 
 settings = Settings()

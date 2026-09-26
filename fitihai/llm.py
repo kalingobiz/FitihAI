@@ -36,7 +36,14 @@ class LegalModel(Protocol):
 class ClaudeLegalModel:
     def __init__(self, settings: Settings, client: anthropic.Anthropic | None = None):
         self.s = settings
-        self.client = client or anthropic.Anthropic(max_retries=3)
+        self._client = client
+
+    @property
+    def client(self) -> anthropic.Anthropic:
+        # Created on first use, so the app (admin console, health) runs before a key is configured.
+        if self._client is None:
+            self._client = anthropic.Anthropic(max_retries=3)
+        return self._client
 
     # ---- helpers --------------------------------------------------------------
     def _parse(self, *, model: str, system: str, messages: list[dict], schema: type[T],

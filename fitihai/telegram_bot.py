@@ -17,7 +17,7 @@ from telegram.ext import (
 
 from .config import settings
 from .corpus.store import CorpusStore
-from .i18n import LANGUAGES, normalize_language, t
+from .i18n import LANGUAGES, consent, normalize_language, t
 from .embeddings import build_embedder
 from .llm import IMAGE_TYPES, PDF_TYPE, build_model
 from .pipeline import Advisor, QuotaExceeded
@@ -37,18 +37,24 @@ def _session_id(update: Update) -> str:
 
 
 def _chunks(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
+    """Split a message into Telegram-sized parts on line boundaries, keeping the order."""
     parts, current = [], ""
     for para in text.split("\n"):
-        while len(para) > limit:
-            parts.append(para[:limit])
-            para = para[limit:]
+        if len(para) > limit:
+            # Flush what came before, then hard-split the over-long line.
+            if current:
+                parts.append(current)
+                current = ""
+            while len(para) > limit:
+                parts.append(para[:limit])
+                para = para[limit:]
         if len(current) + len(para) + 1 > limit:
             parts.append(current)
             current = ""
         current += para + "\n"
     if current.strip():
         parts.append(current)
-    return parts
+    return [p for p in parts if p]
 
 
 def format_answer(res: AskResponse, lang: str) -> str:
@@ -69,10 +75,12 @@ def format_analysis(res: AnalyzeResponse, lang: str) -> str:
     if res.deadlines:
         out.append(f"\n<b>⏰ {e(t('deadlines', lang))}</b>")
         for d in res.deadlines:
-            when = d.date_as_written
-            if d.gregorian_date:
-                when += f" → {d.gregorian_date}"
-            out.append(f"• {e(when)}: {e(d.description)}")
+            when = ", ".join(x for x in (d.date_as_written, d.time_as_written) if x)
+            converted = " ".join(x for x in (d.gregorian_date, d.time_24h) if x)
+            if converted:
+                when += f" → {converted}"
+            note = f" ⚠ {d.time_note}" if d.time_note else ""
+            out.append(f"• {e(when)}: {e(d.description)}{e(note)}")
     if res.lawyer_questions:
         out.append(f"\n<b>❓ {e(t('ask_lawyer', lang))}</b>")
         out += [f"• {e(q)}" for q in res.lawyer_questions]
@@ -104,6 +112,16 @@ async def choose_language(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     context.user_data["lang"] = lang
     context.application.bot_data["advisor"].sessions.get(_session_id(update), lang)
     await query.edit_message_text(t("welcome", lang))
+    await update.effective_chat.send_message(privacy_text(context, lang))
+
+
+def privacy_text(context: ContextTypes.DEFAULT_TYPE, lang: str) -> str:
+    s = context.application.bot_data["advisor"].s
+    return f"🔒 {consent(lang, s.llm_provider, s.session_ttl_minutes)}"
+
+
+async def privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(privacy_text(context, _lang(context)))
 
 
 async def new_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -165,6 +183,7 @@ def build_application(advisor: Advisor, token: str) -> Application:
     app.bot_data["advisor"] = advisor
     app.add_handler(CommandHandler(["start", "lang"], start))
     app.add_handler(CommandHandler("new", new_session))
+    app.add_handler(CommandHandler("privacy", privacy))
     app.add_handler(CallbackQueryHandler(choose_language, pattern=r"^lang:"))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, on_document))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, on_voice))

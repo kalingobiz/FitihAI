@@ -8,6 +8,7 @@
     python -m fitihai.cli laws
     python -m fitihai.cli search "severance pay after dismissal"
     python -m fitihai.cli ask "..." --lang am
+    python -m fitihai.cli eval eval/datasets/qa.jsonl [--label gemini-flash]
 """
 
 from __future__ import annotations
@@ -65,12 +66,19 @@ def main(argv: list[str] | None = None) -> int:
     p_ask = sub.add_parser("ask", help="ask a question (calls the configured AI provider)")
     p_ask.add_argument("question")
     p_ask.add_argument("--lang", default="en")
+    p_eval = sub.add_parser("eval", help="run an evaluation dataset (calls the AI provider)")
+    p_eval.add_argument("datasets", nargs="+", help="one or more .jsonl files")
+    p_eval.add_argument("--out", default="eval/results")
+    p_eval.add_argument("--label", default="", help="short name for this run, e.g. the model")
     args = parser.parse_args(argv)
 
     # import/approve only edit corpus files; everything else needs the database.
     store = CorpusStore(settings.db_path) if args.cmd not in ("import", "approve") else None
     if args.cmd == "ingest":
-        results = store.ingest_dir(Path(args.directory))
+        directory = Path(args.directory)
+        # Loading the main corpus folder mirrors it exactly (laws whose file was deleted are removed).
+        prune = directory.resolve() == settings.corpus_dir.resolve()
+        results = store.ingest_dir(directory, prune=prune)
         for law_id, n in results.items():
             print(f"  {law_id}: {n} articles")
         print(f"Ingested {len(results)} laws into {settings.db_path}")
@@ -116,6 +124,23 @@ def main(argv: list[str] | None = None) -> int:
         for c in res.citations:
             print(f"  • {c.citation}")
         print(f"\n{res.disclaimer}")
+    elif args.cmd == "eval":
+        from .embeddings import build_embedder
+        from .evaluation import TARGETS, load_dataset, run, summarize, write_report
+        from .llm import build_model
+        from .pipeline import Advisor
+
+        items = [item for path in args.datasets for item in load_dataset(Path(path))]
+        advisor = Advisor(settings, store, build_model(settings), build_embedder(settings))
+        print(f"Running {len(items)} items with {settings.llm_provider} …")
+        results = run(advisor, items)
+        summary = summarize(results)
+        run_dir = write_report(results, summary, Path(args.out), args.label)
+        for key, value in summary.items():
+            target = TARGETS.get(key)
+            mark = "" if target is None or value is None else ("  ok" if value >= target else f"  below target {target:.0%}")
+            print(f"  {key:<32} {value if value is not None else 'n/a'}{mark}")
+        print(f"Report: {run_dir / 'report.md'}   Lawyer grading sheet: {run_dir / 'grading.csv'}")
     return 0
 
 

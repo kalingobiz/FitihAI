@@ -1,0 +1,41 @@
+# One-command deployment:
+#   cp .env.example .env        # fill in GEMINI_API_KEY, FITIH_ADMIN_TOKEN, FITIH_USAGE_SALT (and TELEGRAM_BOT_TOKEN)
+#   docker compose up -d                      # web app + admin console on http://localhost:8000
+#   docker compose --profile telegram up -d   # ... plus the Telegram bot
+services:
+  web:
+    build: .
+    env_file: .env
+    environment:
+      FITIH_DB: /app/data/fitihai.db
+      FITIH_TRUST_PROXY: ${FITIH_TRUST_PROXY:-0}
+    command: sh -c "python -m fitihai.cli ingest --embed && exec uvicorn fitihai.api:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./corpus/laws:/app/corpus/laws      # law files live on the host: back them up / commit them to git
+      - fitih-data:/app/data                # search index + embedding cache + anonymous usage counters
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  bot:
+    build: .
+    profiles: ["telegram"]
+    env_file: .env
+    environment:
+      FITIH_DB: /app/data/fitihai.db
+    command: python -m fitihai.telegram_bot
+    volumes:
+      - fitih-data:/app/data                # shares the index; picks up newly published laws automatically
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  fitih-data:

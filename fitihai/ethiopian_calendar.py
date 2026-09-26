@@ -43,3 +43,19 @@ def gregorian_to_ethiopian(d: date) -> tuple[int, int, int]:
 
 def format_ethiopian(year: int, month: int, day: int) -> str:
     return f"{MONTHS_AM[month - 1]} {day}, {year} ዓ.ም"
+
+
+# ---- Ethiopian time of day ---------------------------------------------------------
+# Ethiopian hours are counted from 6 a.m. (day) and 6 p.m. (night):
+#   day   ("ጠዋት", "ቀን", "ከሰዓት")      1 ሰዓት = 07:00 … 6 ሰዓት = 12:00 … 12 ሰዓት = 18:00
+#   night ("ምሽት", "ማታ", "ሌሊት")      1 ሰዓት = 19:00 … 6 ሰዓት = 00:00 … 12 ሰዓት = 06:00
+
+
+def ethiopian_time_to_24h(hour: int, minute: int = 0, period: str = "day") -> str:
+    """Convert an Ethiopian clock time to international 24-hour time ("HH:MM")."""
+    if not (1 <= hour <= 12) or not (0 <= minute <= 59):
+        raise ValueError("Ethiopian hour must be 1-12 and minute 0-59")
+    if period not in ("day", "night"):
+        raise ValueError("period must be 'day' or 'night'")
+    offset = 6 if period == "day" else 18
+    return f"{(hour + offset) % 24:02d}:{minute:02d}"

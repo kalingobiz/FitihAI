@@ -17,6 +17,7 @@ checks, and secrets.
 | `.env.example` | Template with every variable and explanatory comments |
 | `requirements.txt` / `requirements-dev.txt` | Runtime and test dependencies |
 | `Dockerfile` | Container image for the web server |
+| `docker-compose.yml` | Web (+ admin) and Telegram bot sharing one data volume; laws mounted from the host |
 | `Procfile` | `web` and `bot` processes for Railway/Render/Heroku-style hosts |
 | `pytest.ini` | Test configuration |
 | `.github/workflows/ci.yml` | GitHub Actions: runs `pytest` on Python 3.11 and 3.12 for every PR and every push to `main` |
@@ -45,6 +46,9 @@ checks, and secrets.
 | `FITIH_FREE_ANALYSES_PER_MONTH` | `0` | 08 |
 | `FITIH_USAGE_SALT` | `change-me` | 08 |
 | `TELEGRAM_BOT_TOKEN` | — | 10 |
+| `FITIH_ADMIN_TOKEN` | — (admin disabled) | 01, 09 |
+| `FITIH_RATE_LIMIT_PER_MINUTE` | `20` | 08 |
+| `FITIH_TRUST_PROXY` | `0` | 08 |
 
 Real environment variables take precedence over `.env`.
 
@@ -60,6 +64,24 @@ uvicorn fitihai.api:app --reload            # http://localhost:8000
 python -m fitihai.telegram_bot              # in a second terminal
 pytest                                      # no keys needed
 ```
+
+### Docker Compose (recommended)
+```bash
+cp .env.example .env                        # GEMINI_API_KEY, FITIH_ADMIN_TOKEN, FITIH_USAGE_SALT, TELEGRAM_BOT_TOKEN
+docker compose up -d                        # web app + admin console → http://localhost:8000
+docker compose --profile telegram up -d     # plus the Telegram bot
+docker compose logs -f web
+```
+- `./corpus/laws` on the host is mounted into the container. Laws imported in the
+  admin console are written there, so back the folder up or commit it to git.
+- The named volume `fitih-data` holds the search index, the embedding cache and the
+  usage counters. The web server and the bot share it, and the bot picks up published
+  laws automatically.
+- The container health check calls `/api/health`, and the bot starts only after the
+  web server is healthy.
+- The app starts, and the admin console works, **before** an AI key is set.
+  `/api/health` then reports `ai_key_configured: false`, and questions return HTTP 502
+  until the key is added.
 
 ### Hosted (Railway / Render)
 - `Procfile`
@@ -86,8 +108,8 @@ docker run -p 8000:8000 --env-file .env -v $PWD/data:/app/data fitihai
 | Production | Gemini paid or Claude (chosen by evaluation) | Real users |
 
 ### Operations checklist
-- `GET /api/health`: `articles_indexed` should equal the corpus size, and
-  `articles_embedded` should match it.
+- `GET /api/health`: `ai_key_configured` should be `true`; `articles_indexed` should equal
+  the number of approved articles, and `articles_embedded` should match it.
 - After changing laws: commit the files, then redeploy (or run `ingest --embed`)
   and restart the processes.
 - Rotate `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` and `TELEGRAM_BOT_TOKEN` if exposed.
@@ -112,7 +134,12 @@ See §4.
 - An unknown provider value raises `ValueError` at start-up.
 
 ## 9. Testing
-Run `pytest` before every deploy (28 tests at the time of writing). CI runs the same tests on every pull request. After deploying,
+The Docker Compose deployment was run end to end: build, healthy start, a law
+imported and approved through the admin API and then published, a container restart
+(the law was still live, loaded from the host folder), and a clean HTTP 502 for
+questions without an AI key.
+
+Run `pytest` before every deploy (64 tests at the time of writing). CI runs the same tests on every pull request. After deploying,
 check `GET /api/health`, ask one question, and upload one test document.
 
 ## 10. Limitations and next steps

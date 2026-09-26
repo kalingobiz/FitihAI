@@ -8,10 +8,9 @@ code, rather than trusting an AI to do the arithmetic.
 
 ## 2. Scope
 **In scope:** E.C. → Gregorian, Gregorian → E.C., leap-year rules for Pagume, and
-formatting with Amharic month names. It also turns the deadlines the AI
-extracted into both calendars.
-**Out of scope:** finding dates in the document (the AI does that, module 05),
-and Ethiopian time-of-day (the 12-hour clock starting at 6 a.m.).
+formatting with Amharic month names, and **Ethiopian time of day → 24-hour time**. It
+also turns the deadlines and hearing times the AI extracted into both systems.
+**Out of scope:** finding dates and times in the document (the AI does that, module 05).
 
 ## 3. Files
 | File | Role |
@@ -25,7 +24,8 @@ and Ethiopian time-of-day (the 12-hour clock starting at 6 a.m.).
 | `ethiopian_to_gregorian(year, month, day) -> date` | `(2017, 1, 1)` → `2024-09-11` |
 | `gregorian_to_ethiopian(date) -> (year, month, day)` | `2026-09-26` → `(2019, 1, 16)` |
 | `format_ethiopian(y, m, d) -> str` | `(2019, 1, 16)` → `"መስከረም 16, 2019 ዓ.ም"` |
-| `resolve_deadline(Deadline, today=None) -> DeadlineOut` | Fills `gregorian_date` (ISO) and `ethiopian_date` (formatted) |
+| `ethiopian_time_to_24h(hour, minute, period)` | `(3, 0, "day")` → `"09:00"`; `(1, 30, "night")` → `"19:30"` |
+| `resolve_deadline(Deadline, today=None) -> DeadlineOut` | Fills `gregorian_date` (ISO), `ethiopian_date` (formatted), `time_24h` and `time_note` |
 
 Months: 1 መስከረም, 2 ጥቅምት, 3 ኅዳር, 4 ታኅሣሥ, 5 ጥር, 6 የካቲት, 7 መጋቢት, 8 ሚያዝያ,
 9 ግንቦት, 10 ሰኔ, 11 ሐምሌ, 12 ነሐሴ, 13 ጳጉሜ.
@@ -46,6 +46,17 @@ Months: 1 መስከረም, 2 ጥቅምት, 3 ኅዳር, 4 ታኅሣሥ, 5 ጥር
   | `calendar = relative` ("within 15 days") | Not converted: the starting day is unknown |
   | `unknown` or incomplete parts | Left as written |
 
+- **Ethiopian time.** Hours are counted from 6 a.m. for daytime (ጠዋት, ቀን, ከሰዓት) and from
+  6 p.m. for night (ምሽት, ማታ, ሌሊት). Daytime: 24-hour time = hour + 6, so 1 ሰዓት = 07:00,
+  6 ሰዓት = 12:00, 12 ሰዓት = 18:00. Night: hour + 18 (mod 24), so 1 ሰዓት = 19:00,
+  6 ሰዓት = 00:00, 12 ሰዓት = 06:00.
+  | AI extracted | Result |
+  |---|---|
+  | `clock = ethiopian`, hour 1–12, `period` day/night | `time_24h` |
+  | `clock = ethiopian`, `period = unknown` | `time_24h` assuming daytime, plus `time_note: "assumed daytime; check the document"` |
+  | `clock = international`, hour 0–23 | `time_24h` as written |
+  | Out-of-range values (OCR misread) | Left as written, not converted |
+
 ## 6. Configuration
 None.
 
@@ -64,10 +75,12 @@ Pure computation. No data is stored or sent anywhere.
 - `test_analyze_document`: an E.C. deadline is converted end to end.
 - During development, 20,000 random dates were converted both ways with no
   mismatches.
+- `tests/test_product.py`: `test_ethiopian_time` (8 day and night cases),
+  `test_ethiopian_time_rejects_bad_values`, `test_resolve_deadline_times`.
 
 ## 10. Limitations and next steps
-- Ethiopian time of day ("ከጠዋቱ 3 ሰዓት" = 9 a.m.) is not converted yet. Hearing
-  times are often written this way, so this is worth adding.
+- A night-time hour after midnight (e.g. ሌሊት 8 ሰዓት = 02:00) may belong to the next
+  Gregorian day. The date is not shifted automatically, so the reviewer should check.
 - Relative deadlines could be resolved if the user tells us the date they received
   the document. Add a "When did you receive this?" prompt.
 - Offer calendar reminders (Telegram message or `.ics` file) for extracted deadlines.

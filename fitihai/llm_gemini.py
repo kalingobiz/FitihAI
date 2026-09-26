@@ -64,7 +64,14 @@ def _finish_reason(response) -> str:
 class GeminiLegalModel:
     def __init__(self, settings: Settings, client: genai.Client | None = None):
         self.s = settings
-        self.client = client or genai.Client(http_options=types.HttpOptions(retry_options=RETRY))
+        self._client = client
+
+    @property
+    def client(self) -> genai.Client:
+        # Created on first use, so the app (admin console, health) runs before a key is configured.
+        if self._client is None:
+            self._client = genai.Client(http_options=types.HttpOptions(retry_options=RETRY))
+        return self._client
 
     def _generate(self, *, model: str, system: str, contents, schema: type[T] | None,
                   max_tokens: int):

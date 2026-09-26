@@ -13,7 +13,14 @@ text of Ethiopian law. Do not paste summaries, blog posts or AI-generated text h
 Use the Negarit Gazeta (federal) or the regional gazette, and have a licensed
 lawyer check each file before it goes live.
 
-## Adding a law from the gazette (recommended)
+## Adding a law in the browser (easiest)
+
+Open **`/admin`** on the running app and sign in with `FITIH_ADMIN_TOKEN`. Then:
+**Import** the gazette PDF → **Review** (fix any extraction errors; numbering gaps are
+listed) → **Approve** (the reviewing lawyer's name) → **Publish changes**. The web app and
+the Telegram bot use the law within 15 seconds.
+
+## Adding a law from the command line
 
 ```bash
 # 1. Convert the official PDF (it needs a text layer; OCR scanned copies first).

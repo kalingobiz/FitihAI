@@ -22,18 +22,18 @@ uses the same structure so that modules are easy to compare and review.
 
 | # | Module | Summary |
 |---|---|---|
-| 01 | [Corpus and law library](01-corpus.md) | Law file format, parsing into articles, SQLite storage, versioning |
+| 01 | [Corpus and law library](01-corpus.md) | Law file format, gazette import, admin console workflow, storage, auto-reload |
 | 02 | [Search / RAG](02-search-rag.md) | Hybrid keyword + semantic retrieval with rank fusion |
 | 03 | [AI providers](03-ai-providers.md) | Gemini (default) and Claude behind one interface |
 | 04 | [Question answering](04-question-answering.md) | The "What are my rights?" flow |
 | 05 | [Document analysis](05-document-analysis.md) | OCR, clause risk flags, deadlines, questions for a lawyer |
-| 06 | [Ethiopian calendar](06-ethiopian-calendar.md) | E.C. ↔ Gregorian conversion for deadlines |
-| 07 | [Languages and disclaimers](07-languages-disclaimers.md) | Four languages, UI strings, the mandatory disclaimer |
-| 08 | [Sessions, privacy and usage limits](08-sessions-privacy-usage.md) | In-memory sessions, no document storage, hashed quotas |
-| 09 | [Web application](09-web-app.md) | FastAPI endpoints and the browser client |
+| 06 | [Ethiopian calendar](06-ethiopian-calendar.md) | E.C. ↔ Gregorian dates and Ethiopian time → 24-hour, for deadlines and hearings |
+| 07 | [Languages and disclaimers](07-languages-disclaimers.md) | Four languages, UI strings, the mandatory disclaimer, consent text |
+| 08 | [Sessions, privacy and usage limits](08-sessions-privacy-usage.md) | In-memory sessions, no document storage, hashed quotas, rate limits, consent and privacy page |
+| 09 | [Web application](09-web-app.md) | FastAPI endpoints, the browser client, the admin console |
 | 10 | [Telegram bot](10-telegram-bot.md) | The main low-bandwidth channel |
-| 11 | [Deployment and configuration](11-deployment-configuration.md) | Settings, Docker/Procfile, environments, operations |
-| 12 | [Testing and evaluation](12-testing-evaluation.md) | Automated tests and the lawyer-graded quality evaluation |
+| 11 | [Deployment and configuration](11-deployment-configuration.md) | Settings, Docker Compose, environments, operations |
+| 12 | [Testing and evaluation](12-testing-evaluation.md) | Automated tests and the evaluation tool for lawyer-graded quality |
 
 ## System overview
 

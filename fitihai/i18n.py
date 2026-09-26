@@ -45,7 +45,35 @@ DISCLAIMER: dict[str, str] = {
     ),
 }
 
+PROVIDER_NAMES = {"gemini": "Google Gemini", "claude": "Anthropic Claude"}
+
+# Shown before first use (web banner, Telegram /start). {provider} and {minutes} are filled in.
+CONSENT: dict[str, str] = {
+    "en": (
+        "Fitih AI gives legal information, not legal advice. To answer you, your question or document "
+        "is sent to an AI service outside Ethiopia ({provider}). Fitih AI does not keep your documents, "
+        "and conversations are deleted after {minutes} minutes. Only send documents you are allowed to share."
+    ),
+    "am": (
+        "ፍትህ AI የሕግ መረጃ ይሰጣል እንጂ የሕግ ምክር አይሰጥም። መልስ ለመስጠት ጥያቄዎ ወይም ሰነድዎ "
+        "ከኢትዮጵያ ውጭ ወዳለ የAI አገልግሎት ({provider}) ይላካል። ፍትህ AI ሰነዶችዎን አያስቀምጥም፤ "
+        "ውይይቶች ከ{minutes} ደቂቃ በኋላ ይሰረዛሉ። ለማጋራት የተፈቀደልዎትን ሰነድ ብቻ ይላኩ።"
+    ),
+    "om": (
+        "Fitih AI odeeffannoo seeraa kenna malee gorsa seeraa hin kennu. Deebii isiniif kennuuf, gaaffiin "
+        "ykn sanadni keessan tajaajila AI Itoophiyaa ala jiru ({provider}) tti ergama. Fitih AI sanadoota "
+        "keessan hin kuusu; mariin daqiiqaa {minutes} booda ni haqama. Sanada qooduuf hayyamamtan qofa ergaa."
+    ),
+    "ti": (
+        "ፍትሕ AI ሕጋዊ ሓበሬታ ይህብ እምበር ሕጋዊ ምኽሪ ኣይህብን። መልሲ ንምሃብ፡ ሕቶኹም ወይ ሰነድኩም "
+        "ካብ ኢትዮጵያ ወጻኢ ናብ ዘሎ ኣገልግሎት AI ({provider}) ይለኣኽ። ፍትሕ AI ሰነዳትኩም ኣይዕቅብን፤ "
+        "ዝርርባት ድሕሪ {minutes} ደቒቕ ይድምሰሱ። ከተካፍልዎ ዝተፈቕደልኩም ሰነድ ጥራይ ስደዱ።"
+    ),
+}
+
 UI: dict[str, dict[str, str]] = {
+    "consent_ok": {"en": "I understand", "am": "ተረድቻለሁ", "om": "Hubadheera", "ti": "ተረዲኡኒ"},
+    "privacy": {"en": "Privacy", "am": "ግላዊነት", "om": "Dhuunfaa", "ti": "ብሕትውና"},
     "welcome": {
         "en": "Welcome to Fitih AI. Ask a legal question, or send a photo/PDF of a legal document.",
         "am": "እንኳን ወደ ፍትህ AI በደህና መጡ። የሕግ ጥያቄ ይጠይቁ፣ ወይም የሕግ ሰነድ ፎቶ/PDF ይላኩ።",
@@ -111,3 +139,8 @@ def t(key: str, lang: str) -> str:
 
 def disclaimer(lang: str) -> str:
     return DISCLAIMER.get(lang) or DISCLAIMER["en"]
+
+
+def consent(lang: str, provider: str, minutes: int) -> str:
+    text = CONSENT.get(lang) or CONSENT["en"]
+    return text.format(provider=PROVIDER_NAMES.get(provider, provider), minutes=minutes)

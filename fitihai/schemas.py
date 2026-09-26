@@ -12,6 +12,8 @@ Domain = Literal[
 ]
 Severity = Literal["danger", "attention", "standard"]
 Calendar = Literal["ethiopian", "gregorian", "relative", "unknown"]
+Clock = Literal["ethiopian", "international", "none"]
+Period = Literal["day", "night", "unknown"]
 
 
 # ---- model outputs ------------------------------------------------------------
@@ -48,6 +50,11 @@ class Deadline(BaseModel):
     month: int = Field(description="0 if unknown")
     day: int = Field(description="0 if unknown")
     relative_days: int = Field(description="For 'within N days' windows; 0 otherwise")
+    time_as_written: str = Field(description="Time of day exactly as written, e.g. 'ከጠዋቱ 3 ሰዓት'; empty if none")
+    clock: Clock = Field(description="'ethiopian' (hours counted from 6 a.m./6 p.m.), 'international', or 'none'")
+    hour: int = Field(description="Hour as written (1-12 for Ethiopian time, 0-23 for international); -1 if none")
+    minute: int = Field(description="Minute as written; 0 if not given")
+    period: Period = Field(description="For Ethiopian time: 'day' (ጠዋት/ቀን/ከሰዓት) or 'night' (ምሽት/ማታ/ሌሊት)")
 
 
 class DocumentAnalysis(BaseModel):
@@ -74,6 +81,8 @@ class Citation(BaseModel):
 class DeadlineOut(Deadline):
     gregorian_date: str | None = None
     ethiopian_date: str | None = None
+    time_24h: str | None = None
+    time_note: str | None = None
 
 
 class AskResponse(BaseModel):

@@ -1,0 +1,2 @@
+// Example only. FICTIONAL document. Real documents must be anonymised; see eval/README.md.
+{"id": "ex-d1", "kind": "document", "language": "en", "text": "EMPLOYMENT CONTRACT. The worker waives severance pay. The worker must sign by Meskerem 16, 2019 E.C. at 3 o'clock in the morning (Ethiopian time).", "expected_deadlines": [{"gregorian_date": "2026-09-26", "time_24h": "09:00"}], "expected_danger": ["waives severance"]}
