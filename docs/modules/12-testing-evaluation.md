@@ -21,7 +21,8 @@ datasets, metrics, targets, and the process.
 | `tests/test_core.py` | Corpus, retrieval, calendar, pipeline, quota and HTTP API tests |
 | `tests/test_gemini_rag.py` | Gemini provider (fake client), embeddings, hybrid retrieval, provider switch |
 | `tests/fixtures/*.md` | Two **fictional** laws (English labour, Amharic land lease) |
-| `pytest.ini` | Test paths |
+| `pytest.ini` | Test paths and import path |
+| `.github/workflows/ci.yml` | CI: `pytest` on Python 3.11 and 3.12 for each PR and push to `main` (no API keys needed) |
 | `eval/` (to create) | Evaluation datasets and scoring scripts |
 
 ## 4. Interfaces
@@ -103,4 +104,3 @@ about 1 second.
 - Add a small set of browser tests (Playwright) for the web client.
 - Build the `eval/` datasets and scoring scripts. This is the main Phase 1
   deliverable, together with the corpus.
-- Add CI to run tests on every push.

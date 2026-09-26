@@ -19,6 +19,7 @@ checks, and secrets.
 | `Dockerfile` | Container image for the web server |
 | `Procfile` | `web` and `bot` processes for Railway/Render/Heroku-style hosts |
 | `pytest.ini` | Test configuration |
+| `.github/workflows/ci.yml` | GitHub Actions: runs `pytest` on Python 3.11 and 3.12 for every PR and every push to `main` |
 
 ## 4. Interfaces — all settings
 | Variable | Default | Module |
@@ -111,11 +112,10 @@ See §4.
 - An unknown provider value raises `ValueError` at start-up.
 
 ## 9. Testing
-Run `pytest` before every deploy (28 tests at the time of writing). After deploying,
+Run `pytest` before every deploy (28 tests at the time of writing). CI runs the same tests on every pull request. After deploying,
 check `GET /api/health`, ask one question, and upload one test document.
 
 ## 10. Limitations and next steps
-- Add CI (GitHub Actions) to run `pytest` on every push.
 - There is one process per role. To scale out, share sessions (Redis, in memory
   only) and move to PostgreSQL + pgvector.
 - Add structured logging with request IDs and token usage (no content), plus an uptime monitor.
