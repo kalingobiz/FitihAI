@@ -107,6 +107,8 @@ def split_articles(body: str) -> list[Article]:
 
     for line in body.splitlines():
         m = ARTICLE_RE.match(line)
+        if m and m["heading"][:1].islower():
+            m = None  # "Article 35 of this Proclamation ..." is a cross-reference, not a heading
         if m:
             flush()
             current = Article(normalize_article_number(m["num"]), m["heading"].strip(), "")
@@ -123,3 +125,23 @@ def parse_law(raw: str) -> LawDocument:
     if not articles:
         raise ValueError(f"no articles found in {meta['id']!r}; check the 'Article N' headings")
     return LawDocument(meta=meta, articles=articles)
+
+
+def numbering_issues(articles: list[Article]) -> list[str]:
+    """Report gaps, repeats and out-of-order numbers, a sign that text extraction went wrong."""
+    issues: list[str] = []
+    prev: int | None = None
+    for a in articles:
+        if not a.number.isdigit():
+            continue
+        n = int(a.number)
+        if prev is not None:
+            if n == prev:
+                issues.append(f"Article {n} appears twice in a row")
+            elif n < prev:
+                issues.append(f"Article {n} follows Article {prev}")
+            elif n > prev + 1:
+                missing = f"{prev + 1}" if n == prev + 2 else f"{prev + 1}-{n - 1}"
+                issues.append(f"Article(s) {missing} missing before Article {n}")
+        prev = n
+    return issues

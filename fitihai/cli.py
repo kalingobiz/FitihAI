@@ -2,6 +2,9 @@
 
     python -m fitihai.cli ingest [DIR] [--embed]
     python -m fitihai.cli embed
+    python -m fitihai.cli import gazette.pdf --id labour-1156-2019-en --title "Labour Proclamation" \
+        --proclamation 1156/2019 --year 2019 --domain labor --language en --source "..."
+    python -m fitihai.cli approve corpus/laws/labour-1156-2019-en.md --by "Reviewer name"
     python -m fitihai.cli laws
     python -m fitihai.cli search "severance pay after dismissal"
     python -m fitihai.cli ask "..." --lang am
@@ -40,6 +43,21 @@ def main(argv: list[str] | None = None) -> int:
     p_ingest.add_argument("directory", nargs="?", default=str(settings.corpus_dir))
     p_ingest.add_argument("--embed", action="store_true", help="also compute embeddings for semantic search")
     sub.add_parser("embed", help="compute embeddings for articles that have none (Gemini)")
+    p_import = sub.add_parser("import", help="convert a gazette PDF/text into a DRAFT corpus file")
+    p_import.add_argument("path")
+    p_import.add_argument("--id", required=True)
+    p_import.add_argument("--title", required=True)
+    p_import.add_argument("--domain", required=True)
+    p_import.add_argument("--language", required=True, choices=["am", "en", "om", "ti"])
+    p_import.add_argument("--proclamation", default="")
+    p_import.add_argument("--year", default="")
+    p_import.add_argument("--jurisdiction", default="federal")
+    p_import.add_argument("--source", default="", help="gazette issue, page, or official URL")
+    p_import.add_argument("--out", help="default: <corpus dir>/<id>.md")
+    p_import.add_argument("--overwrite", action="store_true")
+    p_approve = sub.add_parser("approve", help="mark a reviewed corpus file as in force")
+    p_approve.add_argument("path")
+    p_approve.add_argument("--by", required=True, help="name of the reviewing lawyer")
     sub.add_parser("laws", help="list ingested laws")
     p_search = sub.add_parser("search", help="test retrieval without calling the AI")
     p_search.add_argument("query")
@@ -49,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     p_ask.add_argument("--lang", default="en")
     args = parser.parse_args(argv)
 
-    store = CorpusStore(settings.db_path)
+    # import/approve only edit corpus files; everything else needs the database.
+    store = CorpusStore(settings.db_path) if args.cmd not in ("import", "approve") else None
     if args.cmd == "ingest":
         results = store.ingest_dir(Path(args.directory))
         for law_id, n in results.items():
@@ -59,9 +78,30 @@ def main(argv: list[str] | None = None) -> int:
             _embed(store)
     elif args.cmd == "embed":
         _embed(store)
+    elif args.cmd == "import":
+        from .corpus.importer import import_law
+
+        meta = {k: getattr(args, k) for k in
+                ("id", "title", "proclamation", "year", "jurisdiction", "domain", "language", "source")}
+        out = Path(args.out) if args.out else settings.corpus_dir / f"{args.id}.md"
+        n, issues = import_law(Path(args.path), out, meta, overwrite=args.overwrite)
+        print(f"Wrote {out} with {n} articles (status: draft).")
+        if issues:
+            print("Check these places first; the PDF text may have been extracted incorrectly:")
+            for issue in issues:
+                print(f"  - {issue}")
+        print("Check every article against the gazette, fix any errors, then run:")
+        print(f"  python -m fitihai.cli approve {out} --by \"<reviewer name>\"")
+    elif args.cmd == "approve":
+        from .corpus.importer import approve
+
+        meta = approve(Path(args.path), args.by)
+        print(f"Approved {meta['id']} (reviewed by {meta['reviewed_by']} on {meta['reviewed_on']}). "
+              "Run `ingest --embed` to make it searchable.")
     elif args.cmd == "laws":
         for law in store.list_laws():
-            print(f"{law['id']:<32} {law['domain']:<16} {law['article_count']:>5} arts  {law['title']}")
+            print(f"{law['id']:<32} {law['domain']:<16} {law['status']:<9} {law['article_count']:>5} arts  "
+                  f"{law['title']}")
     elif args.cmd == "search":
         for hit in BM25Index(store.all_articles()).search([args.query], top_k=args.k):
             print(f"{hit.score:6.2f}  {hit.article.citation}  — {hit.article.heading}")
