@@ -23,6 +23,7 @@ the whole system.
 | File | Role |
 |---|---|
 | `fitihai/corpus/chunker.py` | Front-matter parser, article splitter, Ge'ez numeral conversion |
+| `fitihai/corpus/importer.py` | Gazette PDF/text → draft corpus file; `approve` records the reviewer |
 | `fitihai/corpus/store.py` | `CorpusStore`: SQLite schema, ingest, queries, embedding cache, usage counters |
 | `fitihai/cli.py` | `ingest`, `embed`, `laws`, `search` commands |
 | `corpus/laws/` | Where law files go (ships empty on purpose) |
@@ -43,7 +44,9 @@ domain: labor                 # required: labor | land | commercial | family | c
                               #   civil_procedure | administrative | other
 language: en                  # required: am | en | om | ti
 source: https://...           # official gazette link or scan reference
-status: in_force              # in_force (default) | repealed
+status: in_force              # draft | in_force (default) | repealed
+reviewed_by: <name>           # written by `fitihai.cli approve`
+reviewed_on: YYYY-MM-DD       # written by `fitihai.cli approve`
 ---
 Article 1. Short Title
 This Proclamation may be cited as ...
@@ -51,7 +54,9 @@ This Proclamation may be cited as ...
 
 Recognised article headings: `Article 12`, `ARTICLE 12`, `Art. 12`, `## Article 12`,
 `አንቀጽ 12`, `አንቀፅ 12`, `ዓንቀጽ 12`, `አንቀጽ ፲፪`. They can be followed by `.`, `:`, `-`, `–`, `—` or `)`.
-Text before the first heading (preamble) is ignored.
+Text before the first heading (preamble) is ignored. A heading whose text starts
+with a lowercase letter ("Article 35 of this Proclamation …") is a cross-reference
+and stays inside the current article.
 
 ### Python API
 | Function / class | Description |
@@ -64,10 +69,16 @@ Text before the first heading (preamble) is ignored.
 | `.ingest_dir(path) -> {law_id: count}` | Ingest every `.md`/`.txt` except `README.md` |
 | `.all_articles() -> list[ArticleRecord]` | All articles of laws with `status = in_force` |
 | `.list_laws() -> list[dict]` | Laws with article counts |
+| `import_law(src, out, meta) -> (count, issues)` | Gazette PDF/text → `status: draft` file; `issues` lists missing or out-of-order article numbers |
+| `approve(path, reviewer)` | Sets `status: in_force`, `reviewed_by`, `reviewed_on`; refuses a file that does not parse |
+| `numbering_issues(articles)` | Gaps, repeats and out-of-order numbers |
 | `ArticleRecord.citation` | Human-readable citation, e.g. `Labour Proclamation (Proclamation No. 1156/2019), Art. 39` |
 
 ### CLI
 ```bash
+python -m fitihai.cli import gazette.pdf --id labour-1156-2019-en --title "Labour Proclamation" \
+    --proclamation 1156/2019 --year 2019 --domain labor --language en --source "..."
+python -m fitihai.cli approve corpus/laws/labour-1156-2019-en.md --by "Reviewer name"
 python -m fitihai.cli ingest [DIR] [--embed]
 python -m fitihai.cli laws
 python -m fitihai.cli search "severance pay" -k 5
@@ -84,6 +95,17 @@ python -m fitihai.cli search "severance pay" -k 5
 5. **Replace, don't merge.** Re-ingesting a law deletes its old articles first, so
    amended text never lives next to the old text.
 6. **Only in-force law is searchable.** `all_articles()` filters on `status`.
+
+**Import and review workflow**
+```
+gazette PDF ─► import (strip page headers/footers and page numbers, keep one language,
+               re-join hyphenated words, validate) ─► status: draft   (stored, never cited)
+            ─► reviewer checks each article against the gazette, fixes errors
+            ─► approve --by <name> ─► status: in_force + reviewed_by/on ─► ingest --embed
+```
+Bilingual gazettes print Amharic and English side by side. Importing with
+`--language en` drops lines that are mostly Ge'ez script, and `--language am`
+drops lines that are mostly Latin script. Each language becomes its own file.
 
 **Database tables:** `laws`, `articles` (cascade delete), `embeddings`
 (model + text hash → vector, see module 02) and `usage` (module 08).
@@ -120,11 +142,18 @@ python -m fitihai.cli search "severance pay" -k 5
 ## 9. Testing
 `tests/test_core.py`: `test_geez_numerals`, `test_split_articles_english_and_amharic`,
 `test_parse_law_requires_front_matter`, `test_ingest`.
+`tests/test_importer.py`: header/footer and language cleaning, draft laws are not
+searchable, approval records the reviewer, import from a real (generated) PDF,
+rejection of scanned PDFs, cross-references are not headings, numbering issues,
+and the CLI `import`/`approve` commands.
 To check by hand: `python -m fitihai.cli ingest tests/fixtures && python -m fitihai.cli laws`.
 
 ## 10. Limitations and next steps
-- **The corpus is empty.** Phase 1 work: type or OCR the Layer-1 federal laws from
-  the Negarit Gazeta, then do a lawyer QA pass on each law.
+- **The corpus is empty.** Phase 1 work: import the Layer-1 federal laws from the
+  Negarit Gazeta with `fitihai.cli import`, then do a lawyer QA pass on each law and
+  run `approve`.
+- The importer needs a PDF with a text layer. Scanned gazettes must be OCR'd first.
+  The two-column layout may still interleave sentences, which the reviewer must fix.
 - Sub-articles (e.g. Art. 39(1)(b)) are not split out. The whole article is cited.
 - There is no automatic tracking of amendments. An editor must update files when
   the gazette publishes changes. Add an `amended_by` field and a change log.
