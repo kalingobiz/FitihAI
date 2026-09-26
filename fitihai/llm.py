@@ -1,4 +1,4 @@
-"""Thin wrapper over the Anthropic SDK (and optional Gemini OCR).
+"""AI providers behind one interface: Gemini (default) and Claude.
 
 The pipeline depends only on the `LegalModel` protocol, so tests can swap in a
 fake and a different provider can be added without touching the pipeline.
@@ -37,7 +37,6 @@ class ClaudeLegalModel:
     def __init__(self, settings: Settings, client: anthropic.Anthropic | None = None):
         self.s = settings
         self.client = client or anthropic.Anthropic(max_retries=3)
-        self._gemini = None
 
     # ---- helpers --------------------------------------------------------------
     def _parse(self, *, model: str, system: str, messages: list[dict], schema: type[T],
@@ -68,7 +67,7 @@ class ClaudeLegalModel:
             recent = "\n".join(f"{m['role']}: {m['content'][:500]}" for m in history[-4:])
             context = f"<conversation_so_far>\n{recent}\n</conversation_so_far>\n\n"
         return self._parse(
-            model=self.s.fast_model,
+            model=self.s.claude_fast_model,
             system=ROUTER_SYSTEM,
             messages=[{"role": "user", "content": f"{context}<message>\n{message}\n</message>"}],
             schema=Route,
@@ -78,7 +77,7 @@ class ClaudeLegalModel:
     def answer(self, user_content: str, history: list[dict]) -> Answer:
         messages = [*history, {"role": "user", "content": user_content}]
         return self._parse(
-            model=self.s.reasoning_model,
+            model=self.s.claude_reasoning_model,
             system=ANSWER_SYSTEM,
             messages=messages,
             schema=Answer,
@@ -89,7 +88,7 @@ class ClaudeLegalModel:
 
     def analyze(self, user_content: str) -> DocumentAnalysis:
         return self._parse(
-            model=self.s.reasoning_model,
+            model=self.s.claude_reasoning_model,
             system=ANALYZE_SYSTEM,
             messages=[{"role": "user", "content": user_content}],
             schema=DocumentAnalysis,
@@ -99,8 +98,6 @@ class ClaudeLegalModel:
         )
 
     def transcribe(self, data: bytes, media_type: str) -> str:
-        if self.s.ocr_provider == "gemini":
-            return self._transcribe_gemini(data, media_type)
         b64 = base64.standard_b64encode(data).decode("ascii")
         if media_type == PDF_TYPE:
             block = {"type": "document", "source": {"type": "base64", "media_type": PDF_TYPE, "data": b64}}
@@ -109,7 +106,7 @@ class ClaudeLegalModel:
         else:
             raise ValueError(f"unsupported file type: {media_type}")
         response = self.client.messages.create(
-            model=self.s.ocr_model,
+            model=self.s.claude_ocr_model,
             max_tokens=16000,
             system=OCR_SYSTEM,
             messages=[{"role": "user", "content": [block, {"type": "text", "text": "Transcribe this document."}]}],
@@ -118,17 +115,13 @@ class ClaudeLegalModel:
             raise ModelRefusal("the model declined to transcribe this document")
         return "".join(b.text for b in response.content if b.type == "text").strip()
 
-    def _transcribe_gemini(self, data: bytes, media_type: str) -> str:
-        """Optional Gemini OCR path, for A/B-testing Ethiopic OCR quality."""
-        try:
-            from google import genai
-            from google.genai import types
-        except ImportError as exc:  # pragma: no cover - optional dependency
-            raise RuntimeError("FITIH_OCR_PROVIDER=gemini requires `pip install google-genai`") from exc
-        if self._gemini is None:
-            self._gemini = genai.Client()  # reads GEMINI_API_KEY
-        result = self._gemini.models.generate_content(
-            model=self.s.gemini_ocr_model,
-            contents=[types.Part.from_bytes(data=data, mime_type=media_type), OCR_SYSTEM],
-        )
-        return (result.text or "").strip()
+
+def build_model(settings: Settings) -> LegalModel:
+    """Pick the provider from FITIH_LLM_PROVIDER."""
+    if settings.llm_provider == "claude":
+        return ClaudeLegalModel(settings)
+    if settings.llm_provider == "gemini":
+        from .llm_gemini import GeminiLegalModel
+
+        return GeminiLegalModel(settings)
+    raise ValueError(f"unknown FITIH_LLM_PROVIDER: {settings.llm_provider!r} (use 'gemini' or 'claude')")

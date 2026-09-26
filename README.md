@@ -21,10 +21,10 @@ Amharic · Afaan Oromo · Tigrinya · English — on Telegram and the web.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env              # add ANTHROPIC_API_KEY (and TELEGRAM_BOT_TOKEN for the bot)
+cp .env.example .env              # add GEMINI_API_KEY (free at aistudio.google.com) and TELEGRAM_BOT_TOKEN
 
 # 1. Add official law texts to corpus/laws/ (see corpus/laws/README.md), then:
-python -m fitihai.cli ingest
+python -m fitihai.cli ingest --embed     # --embed builds the semantic (RAG) index with Gemini
 
 # 2. Web app + API  → http://localhost:8000
 uvicorn fitihai.api:app --reload
@@ -32,24 +32,44 @@ uvicorn fitihai.api:app --reload
 # 3. Telegram bot (separate process)
 python -m fitihai.telegram_bot
 
-# Tests (no API key needed; they use a fake model and a fictional law)
+# Tests (no API key needed; they use fake models and a fictional law)
 pytest
 ```
 
 > The corpus ships **empty**. Fitih AI will only cite law you load into it. Until
 > you add laws, it will answer that its library does not contain the relevant law.
 
+## AI providers
+
+| | **Gemini (default)** | Claude (optional) |
+|---|---|---|
+| Switch | `FITIH_LLM_PROVIDER=gemini` | `FITIH_LLM_PROVIDER=claude` |
+| Router | `gemini-2.5-flash-lite` | `claude-haiku-4-5` |
+| Answers / analysis | `gemini-2.5-flash` | `claude-sonnet-5` |
+| OCR | `gemini-2.5-flash` | `claude-sonnet-5` |
+| Free tier | Yes, rate-limited | No |
+
+Embeddings for RAG always use Gemini (`gemini-embedding-001`) when `FITIH_EMBEDDINGS=gemini`,
+whichever LLM provider you pick. Model names are configurable in `.env`.
+
+> ⚠️ **Free-tier privacy:** on the Gemini API free tier, Google may use prompts and
+> responses to improve its products. That is fine for development, and for the public law
+> text in the corpus. **Enable billing (paid tier) before real users send personal
+> documents or questions.** Check the current terms and limits in Google AI Studio.
+
 ## How it works
 
 ```
 question / document
    │
-   ├─ OCR (Claude vision, or Gemini via FITIH_OCR_PROVIDER=gemini)       [documents only]
-   ├─ Router — Claude Haiku 4.5: domain, jurisdiction, urgency,
+   ├─ OCR (Gemini Flash / Claude vision)                                  [documents only]
+   ├─ Router (fast model): domain, jurisdiction, urgency,
    │           search queries in English AND Amharic
-   ├─ Retrieval — BM25 over article-level corpus (SQLite),
-   │           Ethiopic homophone folding (ሀ/ሐ/ኀ, ሰ/ሠ, አ/ዐ, ጸ/ፀ) + syllable bigrams
-   ├─ Reasoning — Claude Sonnet 5, structured JSON output, cites article IDs
+   ├─ Hybrid retrieval (RAG) over the article-level corpus (SQLite):
+   │     keyword  — BM25, Ethiopic homophone folding (ሀ/ሐ/ኀ, ሰ/ሠ, አ/ዐ, ጸ/ፀ) + syllable bigrams
+   │     semantic — Gemini embeddings (cross-language: Amharic question ↔ English article)
+   │     merged with reciprocal rank fusion; falls back to keyword-only if embeddings fail
+   ├─ Reasoning (Gemini Flash / Claude Sonnet): structured JSON output, cites article IDs
    └─ Post-processing — drop citations not in the retrieved set, convert E.C. dates,
                         sort clauses by severity, append disclaimer
 ```
@@ -57,9 +77,11 @@ question / document
 | Path | What |
 |---|---|
 | `fitihai/pipeline.py` | The two flows (`Advisor.ask`, `Advisor.analyze_document`) |
-| `fitihai/llm.py` | Claude calls (router, answer, analysis, OCR); optional Gemini OCR |
+| `fitihai/llm_gemini.py` | Gemini provider (router, answer, analysis, OCR) |
+| `fitihai/llm.py` | Provider interface, Claude provider, `build_model()` switch |
+| `fitihai/embeddings.py` | Gemini embeddings, vector index, embedding cache |
 | `fitihai/prompts.py` | System prompts |
-| `fitihai/retrieval.py` | BM25 index + Ethiopic tokenisation |
+| `fitihai/retrieval.py` | BM25 index, Ethiopic tokenisation, rank fusion |
 | `fitihai/corpus/` | Law file parser (Ge'ez numerals) and SQLite store |
 | `fitihai/ethiopian_calendar.py` | E.C. ↔ Gregorian conversion |
 | `fitihai/i18n.py` | Languages, disclaimers, UI strings |

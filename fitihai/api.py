@@ -17,7 +17,8 @@ from starlette.concurrency import run_in_threadpool
 from .config import ROOT, settings
 from .corpus.store import CorpusStore
 from .i18n import DISCLAIMER, LANGUAGES, UI
-from .llm import ClaudeLegalModel, IMAGE_TYPES, ModelRefusal, PDF_TYPE
+from .embeddings import build_embedder
+from .llm import IMAGE_TYPES, PDF_TYPE, ModelRefusal, build_model
 from .pipeline import Advisor, QuotaExceeded
 from .schemas import AnalyzeResponse, AskResponse
 
@@ -27,7 +28,7 @@ ALLOWED_UPLOADS = IMAGE_TYPES | {PDF_TYPE, "text/plain"}
 
 @lru_cache(maxsize=1)
 def get_advisor() -> Advisor:
-    return Advisor(settings, CorpusStore(settings.db_path), ClaudeLegalModel(settings))
+    return Advisor(settings, CorpusStore(settings.db_path), build_model(settings), build_embedder(settings))
 
 
 class AskRequest(BaseModel):
@@ -42,7 +43,8 @@ def create_app(advisor_factory=get_advisor) -> FastAPI:
     @app.get("/api/health")
     def health():
         advisor = advisor_factory()
-        return {"status": "ok", "articles_indexed": len(advisor.index)}
+        return {"status": "ok", "provider": advisor.s.llm_provider, "articles_indexed": len(advisor.index),
+                "articles_embedded": len(advisor.vectors)}
 
     @app.get("/api/meta")
     def meta():

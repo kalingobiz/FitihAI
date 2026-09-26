@@ -5,8 +5,9 @@ homophone letters (ሀ/ሐ/ኀ, ሰ/ሠ, አ/ዐ, ጸ/ፀ) are folded together, 
 words also contribute character bigrams so inflected forms still match.
 
 Cross-language matching (e.g. an Amharic question against an English law) is
-handled upstream: the router model produces search queries in both English and
-Amharic. An embedding index can be added later behind the same interface.
+handled two ways: the router writes search queries in both English and Amharic,
+and (optionally) Gemini embeddings add semantic search. The two rankings are
+merged with reciprocal rank fusion.
 """
 
 from __future__ import annotations
@@ -116,3 +117,12 @@ class BM25Index:
             hits.append(Hit(a, score))
         hits.sort(key=lambda h: h.score, reverse=True)
         return hits[:top_k]
+
+
+def reciprocal_rank_fusion(rankings: Iterable[Sequence[str]], k: int = 60) -> list[tuple[str, float]]:
+    """Merge ranked ID lists; items ranked high in several lists come first."""
+    scores: dict[str, float] = defaultdict(float)
+    for ranking in rankings:
+        for rank, item in enumerate(ranking):
+            scores[item] += 1.0 / (k + rank + 1)
+    return sorted(scores.items(), key=lambda kv: kv[1], reverse=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from datetime import date, timedelta
 
@@ -11,11 +12,15 @@ from .ethiopian_calendar import ethiopian_to_gregorian, format_ethiopian, gregor
 from .i18n import LANGUAGE_NAMES_EN, disclaimer
 from .llm import LegalModel
 from .prompts import format_excerpts, language_instruction
-from .retrieval import BM25Index
+from .embeddings import Embedder, VectorIndex, load_vector_index
+from .retrieval import BM25Index, reciprocal_rank_fusion
 from .schemas import AnalyzeResponse, AskResponse, Citation, DeadlineOut, Deadline
 from .sessions import Session, SessionStore
 
 MAX_DOCUMENT_CHARS = 60_000
+CANDIDATES = 30  # per retriever, before fusion
+
+log = logging.getLogger("fitihai.pipeline")
 
 
 class QuotaExceeded(Exception):
@@ -23,25 +28,49 @@ class QuotaExceeded(Exception):
 
 
 class Advisor:
-    def __init__(self, settings: Settings, store: CorpusStore, model: LegalModel):
+    def __init__(self, settings: Settings, store: CorpusStore, model: LegalModel,
+                 embedder: Embedder | None = None):
         self.s = settings
         self.store = store
         self.model = model
+        self.embedder = embedder
         self.sessions = SessionStore(settings.session_ttl_minutes, settings.max_history_turns)
         self._index_lock = threading.Lock()
         self.reload_index()
 
     def reload_index(self) -> None:
-        index = BM25Index(self.store.all_articles())
+        articles = self.store.all_articles()
+        index = BM25Index(articles)
+        vectors = load_vector_index(self.store, self.embedder, articles) if self.embedder else VectorIndex([], [])
         with self._index_lock:
             self.index = index
-            self._by_id = {a.id: a for a in index.articles}
+            self.vectors = vectors
+            self._by_id = {a.id: a for a in articles}
 
     # ---- shared helpers -------------------------------------------------------------
-    def _retrieve(self, queries: list[str], domain: str, jurisdiction: str) -> list[ArticleRecord]:
+    def _retrieve(self, queries: list[str], domain: str, jurisdiction: str,
+                  semantic_text: str) -> list[ArticleRecord]:
+        """Hybrid RAG retrieval: keyword (BM25) + semantic (embeddings), fused by rank."""
         juris = [] if jurisdiction in ("", "unknown", "federal") else [jurisdiction]
-        hits = self.index.search(queries, top_k=self.s.top_k, domains=[domain], jurisdictions=juris)
-        return [h.article for h in hits]
+        keyword = [h.article.id for h in self.index.search(queries, top_k=CANDIDATES, domains=[domain],
+                                                             jurisdictions=juris)]
+        rankings = [keyword]
+        if self.embedder and len(self.vectors):
+            try:
+                qv = self.embedder.embed_query(semantic_text)
+                rankings.append([aid for aid, _ in self.vectors.search(qv, CANDIDATES)])
+            except Exception:
+                log.warning("semantic search unavailable; using keyword search only", exc_info=True)
+        out = []
+        for aid, _ in reciprocal_rank_fusion(rankings):
+            a = self._by_id[aid]
+            j = a.jurisdiction.lower()
+            if juris and j != "federal" and j not in juris:
+                continue
+            out.append(a)
+            if len(out) == self.s.top_k:
+                break
+        return out
 
     def _citations(self, ids: list[str], allowed: list[ArticleRecord]) -> list[Citation]:
         """Keep only citations that point at articles we actually showed the model."""
@@ -70,7 +99,8 @@ class Advisor:
 
         route = self.model.route(question, session.history)
         queries = [question, *route.search_queries_en, *route.search_queries_am]
-        articles = self._retrieve(queries, route.domain, route.jurisdiction) if route.is_legal_question else []
+        articles = (self._retrieve(queries, route.domain, route.jurisdiction, question)
+                    if route.is_legal_question else [])
 
         user_content = (
             f"{format_excerpts(articles)}\n\n"
@@ -116,7 +146,7 @@ class Advisor:
 
         route = self.model.route(f"Legal document received by the user:\n{text[:4000]}", [])
         queries = [text[:1500], *route.search_queries_en, *route.search_queries_am]
-        articles = self._retrieve(queries, route.domain, route.jurisdiction)
+        articles = self._retrieve(queries, route.domain, route.jurisdiction, text[:2000])
 
         user_content = (
             f"{format_excerpts(articles)}\n\n"

@@ -18,7 +18,8 @@ from telegram.ext import (
 from .config import settings
 from .corpus.store import CorpusStore
 from .i18n import LANGUAGES, normalize_language, t
-from .llm import ClaudeLegalModel, IMAGE_TYPES, PDF_TYPE
+from .embeddings import build_embedder
+from .llm import IMAGE_TYPES, PDF_TYPE, build_model
 from .pipeline import Advisor, QuotaExceeded
 from .schemas import AnalyzeResponse, AskResponse
 
@@ -175,7 +176,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     if not settings.telegram_token:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN")
-    advisor = Advisor(settings, CorpusStore(settings.db_path), ClaudeLegalModel(settings))
+    advisor = Advisor(settings, CorpusStore(settings.db_path), build_model(settings), build_embedder(settings))
     build_application(advisor, settings.telegram_token).run_polling()
 
 

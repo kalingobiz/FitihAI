@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from array import array
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -33,6 +34,12 @@ CREATE TABLE IF NOT EXISTS articles (
     text TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_articles_law ON articles(law_id);
+CREATE TABLE IF NOT EXISTS embeddings (
+    model TEXT NOT NULL,
+    text_hash TEXT NOT NULL,
+    vector BLOB NOT NULL,
+    PRIMARY KEY (model, text_hash)
+);
 CREATE TABLE IF NOT EXISTS usage (
     user_hash TEXT NOT NULL,
     period TEXT NOT NULL,
@@ -122,6 +129,18 @@ class CorpusStore:
             " LEFT JOIN articles a ON a.law_id = l.id GROUP BY l.id ORDER BY l.domain, l.title"
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # ---- embedding cache (keyed by article text hash, so unchanged articles are never re-embedded)
+    def load_embeddings(self, model: str) -> dict[str, list[float]]:
+        rows = self.conn.execute("SELECT text_hash, vector FROM embeddings WHERE model = ?", (model,)).fetchall()
+        return {r["text_hash"]: array("f", r["vector"]).tolist() for r in rows}
+
+    def save_embeddings(self, model: str, vectors: dict[str, list[float]]) -> None:
+        with self.conn:
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO embeddings (model, text_hash, vector) VALUES (?, ?, ?)",
+                [(model, h, array("f", v).tobytes()) for h, v in vectors.items()],
+            )
 
     # ---- anonymous usage counters -------------------------------------------
     @staticmethod

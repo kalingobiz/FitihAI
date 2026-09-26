@@ -22,9 +22,10 @@ with:
 - **citations to the exact article of Ethiopian law, checked by the server** before
   the user sees them.
 
-A consultation costs 500–2,000 ETB **[source]**. Fitih AI costs roughly **3–4 ETB
-per question and 9–15 ETB per document** in AI fees, which is 50–500× cheaper. Citizens
-use it free. NGO, government and law-firm licences pay for it.
+A consultation costs 500–2,000 ETB **[source]**. With Google Gemini, development
+and the pilot can run on the **free tier**. At paid rates Fitih AI costs roughly
+**1 ETB per question and 4 ETB per document** in AI fees, which is 100–2,000×
+cheaper. Citizens use it free. NGO, government and law-firm licences pay for it.
 
 **Status: a working prototype exists** (this repository): web app, Telegram bot,
 article-level legal search, citation verification, E.C. date conversion, and
@@ -92,28 +93,40 @@ measured, not assumed (see §9).
 ## 5. Architecture
 
 ```
-Telegram bot ─┐                         ┌─ Router (Claude Haiku 4.5): domain, jurisdiction,
+Telegram bot ─┐                         ┌─ Router (Gemini Flash-Lite): domain, jurisdiction,
 Web app ──────┼─► FastAPI ─► Pipeline ──┤   urgency, EN+AM search queries
-              │                         ├─ Retrieval: BM25 over article-level corpus
-              │                         │   (Ethiopic normalisation; embeddings later)
-              │                         ├─ Reasoning (Claude Sonnet 5): answer / analysis,
+              │                         ├─ Hybrid RAG retrieval over article-level corpus:
+              │                         │    keyword (BM25, Ethiopic normalisation)
+              │                         │  + semantic (Gemini embeddings, cross-language)
+              │                         │  → reciprocal rank fusion
+              │                         ├─ Reasoning (Gemini 2.5 Flash): answer / analysis,
               │                         │   structured JSON output
-              │                         ├─ OCR (Claude vision; Gemini optional for A/B)
+              │                         ├─ OCR (Gemini Flash vision)
               │                         └─ Citation verifier · E.C. date converter · disclaimer
-              └─ SQLite: corpus + anonymous usage counters (no user content)
+              └─ SQLite: corpus + embedding cache + anonymous usage counters (no user content)
 ```
 
 | Layer | Choice | Why |
 |---|---|---|
 | Backend | Python, FastAPI | Async, simple, same language as the AI tooling |
-| Reasoning | Claude Sonnet 5 (configurable) | Strong multilingual legal reasoning, structured outputs |
-| Routing | Claude Haiku 4.5 | Cheap, fast classification |
-| OCR | Claude vision; Gemini optional | One provider by default, with benchmarks deciding |
-| Retrieval | BM25 + bilingual query expansion | No extra service; handles Amharic↔English |
+| AI provider | **Google Gemini** (default); Anthropic Claude as a switchable alternative | Gemini's free tier covers development and the pilot. Being able to switch avoids lock-in and allows quality comparison |
+| Reasoning | Gemini 2.5 Flash | Multimodal, multilingual, structured outputs, low cost |
+| Routing | Gemini 2.5 Flash-Lite | Cheapest model; classification only |
+| OCR | Gemini Flash vision | Same provider; benchmark against Claude on Ethiopic |
+| Embeddings | gemini-embedding-001 (768-dim) | Multilingual semantic search; free tier; cached per article |
+| Retrieval | Hybrid BM25 + embeddings | Keyword precision for article numbers and legal terms, semantic reach across languages |
 | Storage | SQLite → PostgreSQL + pgvector at scale | One database |
 | Web | Static HTML/JS served by FastAPI | No build step; works on low-end phones |
 | Telegram | python-telegram-bot | Photo/PDF intake, language picker |
 | Hosting | Railway/Render (pilot) | Zero-config; review data residency before scale |
+
+**Provider strategy.**
+
+| Stage | Tier | Data |
+|---|---|---|
+| Development and internal testing | Gemini **free tier** | Test documents and public law text only |
+| Pilot with real users | Gemini **paid tier** | Paid tier keeps prompts out of Google's product training. Cost is still low (see §10) |
+| Production | Gemini paid, or Claude | Chosen by the §9 evaluation, per task |
 
 ## 6. Legal knowledge base
 
@@ -156,6 +169,9 @@ businesses (licensing, tax), researchers.
 - **Consent for AI processing:** users are told their document is sent to an AI
   provider outside Ethiopia. Provider retention terms are reviewed and disclosed, in
   line with the Personal Data Protection Proclamation.
+- **No free-tier AI for real user data:** on the Gemini free tier, Google may use
+  content to improve its products. The free tier is used only for development and
+  public law text. The paid tier is enabled before any real user data is processed.
 - **Legal information, not legal advice:** positioned and worded as such. There are
   referral paths to licensed advocates and legal-aid centres, and the bar / Attorney
   General is consulted before public launch.
@@ -179,23 +195,26 @@ analysed; user-reported outcome ("did this help you act?"); NGO field-worker ado
 
 ## 10. Costs
 
-Assumptions: Sonnet 5 at $2/$10 per million input/output tokens, Haiku 4.5 at
-$1/$5, 1 USD ≈ 150 ETB (update at submission).
+Assumptions **[verify current prices]**: Gemini 2.5 Flash about $0.30 / $2.50 per
+million input/output tokens, Flash-Lite about $0.10 / $0.40, gemini-embedding-001
+about $0.15 per million tokens, and 1 USD ≈ 150 ETB. Claude figures are shown for comparison.
 
-| Operation | Tokens (in / out, approx.) | USD | ETB |
+| Operation | Tokens (in / out, approx.) | Gemini paid | Claude (Sonnet 5 + Haiku) |
 |---|---|---|---|
-| Question (router + grounded answer) | 5.7k / 1.5k | ~$0.024 | ~3.6 |
-| Document, 1–2 page photo (OCR + router + analysis) | 13k / 6k | ~$0.08 | ~12 |
+| Question (router + embedding + grounded answer) | 5.7k / 1.8k | ~$0.006 (**~1 ETB**) | ~$0.024 (~3.6 ETB) |
+| Document, 1–2 page photo (OCR + router + analysis) | 13k / 8k | ~$0.025 (**~4 ETB**) | ~$0.08 (~12 ETB) |
+| Embedding the whole Layer-1 corpus once (~5,000 articles) | ~3M | ~$0.45, or free tier | — |
 
-Ways to cut costs further: route simple questions to Haiku, move OCR to a cheaper
-model if the benchmark allows, reuse the cached system prompt, and lower reasoning
-effort where evaluation shows no loss in quality.
+**Free tier:** within Google's daily and per-minute limits, development and a small
+pilot cost **$0 in AI fees**. The limits change, so check AI Studio. The app retries
+automatically on rate-limit errors, and search falls back to keyword-only if
+embedding is throttled.
 
 **Pilot budget (6 months, indicative):**
 
 | Item | Estimate |
 |---|---|
-| AI API (10k questions + 2k documents / month) | ~$400 / month |
+| AI API (10k questions + 2k documents / month) | ~$110 / month on Gemini paid tier (~$400 on Claude); $0 on free tier during development |
 | Hosting | ~$30 / month |
 | Lawyer review (corpus sign-off + evaluation grading) | largest line item; budget by hours |
 | Corpus digitisation (typing / OCR QA of gazettes) | per-page contract |
@@ -231,7 +250,9 @@ effort where evaluation shows no loss in quality.
 | Privacy / cross-border data | Nothing stored; consent notice; provider terms reviewed |
 | Poor quality in lower-resource languages | Per-language evaluation; beta labelling until targets are met |
 | Poor photos | Legibility rating; request a clearer photo |
-| API cost or availability | Model choice is configurable; usage caps; licence revenue |
+| API cost or availability | Two providers behind one interface (switch with one setting); usage caps; licence revenue |
+| Free-tier data use | Free tier only for development and public law text; paid tier before real users |
+| Free-tier rate limits | Automatic retry and backoff; keyword-only fallback; move to paid tier for the pilot |
 
 ## 14. Team
 

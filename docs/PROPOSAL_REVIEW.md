@@ -41,17 +41,19 @@ Findings are ordered by how much damage they would do if left as is.
 
 - `claude-sonnet-4` → current is **`claude-sonnet-5`** (configurable).
 - `gemini-1.5-flash` has been retired, and `text-embedding-004` has been superseded.
-- **The dual-API design is not required.** Claude reads images and PDFs directly,
-  so the MVP runs on a single provider with a single bill and a single data
-  processing agreement. Gemini stays as an optional OCR provider
-  (`FITIH_OCR_PROVIDER=gemini`), so the Ethiopic OCR question can be settled by
-  benchmark rather than assumption.
-- **Embeddings are not the first thing to build.** An Amharic question often
-  needs to match an English statute, and embeddings are weak there too. The MVP
-  uses (a) a cheap router call that writes search queries in both English and
-  Amharic legal vocabulary, and (b) a BM25 index with Ethiopic-specific
-  normalisation (folding homophone letters ሀ/ሐ/ኀ, ሰ/ሠ, አ/ዐ, ጸ/ፀ, plus
-  syllable bigrams). Add embeddings once the evaluation set shows where BM25 fails.
+- `gemini-1.5-flash` → use **`gemini-2.5-flash`** / **`gemini-2.5-flash-lite`**;
+  `text-embedding-004` → **`gemini-embedding-001`**. All are configurable.
+- **The dual-API split (Gemini for OCR, Claude for reasoning) is not required.**
+  Both providers can read images and PDFs. Running every step on one provider means
+  one bill, one API key and one data-processing agreement. The prototype defaults to
+  **Gemini for everything** (free tier; see §9), and Claude is available with one
+  setting (`FITIH_LLM_PROVIDER=claude`). The benchmark decides which is better per task.
+- **Retrieval should be hybrid, not embeddings alone.** Embeddings help an Amharic
+  question find an English article. Keyword search is better for exact article
+  numbers and fixed legal terms. The prototype does both: BM25 with
+  Ethiopic-specific normalisation (folding homophone letters ሀ/ሐ/ኀ, ሰ/ሠ, አ/ዐ, ጸ/ፀ,
+  plus syllable bigrams), bilingual search queries from the router, and Gemini
+  embeddings. The rankings are merged with reciprocal rank fusion.
 - **Voice-to-text** is listed as a feature without a speech-recognition provider.
   Amharic/Oromo ASR is a separate project. Mark it as Phase 4.
 
@@ -133,5 +135,24 @@ before publishing; this review was written without access to it.*
 - **Urgency routing** (above).
 - **Ge'ez numeral support** in the corpus parser (አንቀጽ ፲፪ → Article 12).
 - **Salted-hash usage counters.** Raw Telegram IDs are never stored.
+
+## 9. Update: Gemini as the default provider
+
+The team asked to prefer Gemini because of its free tier. That is a good fit for
+this stage, and it partly restores the original cost claim. At Gemini 2.5 Flash
+paid rates, a question costs about **1 ETB**, a document about **4 ETB**, and
+development costs **$0** on the free tier. The prototype now:
+
+- runs every AI step on **Gemini by default** (`FITIH_LLM_PROVIDER=gemini`), with
+  Claude kept as a one-setting alternative;
+- uses **Gemini embeddings for real RAG**: hybrid keyword + semantic search, so an
+  Amharic question can find an English article;
+- caches article embeddings, so only new or changed articles are embedded again;
+- retries on free-tier rate limits and falls back to keyword search if embedding fails.
+
+**One condition:** on the Gemini free tier, Google may use prompts and responses
+to improve its products. Use the free tier for development and public law text
+only. Enable billing before real citizens send summonses, contracts or personal
+questions.
 
 See `PROPOSAL_v2.md` for the revised proposal text.

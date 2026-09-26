@@ -32,13 +32,23 @@ def _int(name: str, default: int) -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    # Claude models. Reasoning = answers + document analysis; fast = routing/classification.
-    reasoning_model: str = field(default_factory=lambda: os.environ.get("FITIH_REASONING_MODEL", "claude-sonnet-5"))
-    fast_model: str = field(default_factory=lambda: os.environ.get("FITIH_FAST_MODEL", "claude-haiku-4-5"))
-    ocr_model: str = field(default_factory=lambda: os.environ.get("FITIH_OCR_MODEL", "claude-sonnet-5"))
-    # "claude" (default) or "gemini" (requires google-genai + GEMINI_API_KEY).
-    ocr_provider: str = field(default_factory=lambda: os.environ.get("FITIH_OCR_PROVIDER", "claude"))
+    # Which provider runs the AI steps (router, answer, analysis, OCR): "gemini" or "claude".
+    llm_provider: str = field(default_factory=lambda: os.environ.get("FITIH_LLM_PROVIDER", "gemini").lower())
+
+    # Gemini models (GEMINI_API_KEY). Reasoning = answers + document analysis; fast = routing.
+    gemini_reasoning_model: str = field(default_factory=lambda: os.environ.get("FITIH_GEMINI_REASONING_MODEL", "gemini-2.5-flash"))
+    gemini_fast_model: str = field(default_factory=lambda: os.environ.get("FITIH_GEMINI_FAST_MODEL", "gemini-2.5-flash-lite"))
     gemini_ocr_model: str = field(default_factory=lambda: os.environ.get("FITIH_GEMINI_OCR_MODEL", "gemini-2.5-flash"))
+
+    # Claude models (ANTHROPIC_API_KEY).
+    claude_reasoning_model: str = field(default_factory=lambda: os.environ.get("FITIH_CLAUDE_REASONING_MODEL", "claude-sonnet-5"))
+    claude_fast_model: str = field(default_factory=lambda: os.environ.get("FITIH_CLAUDE_FAST_MODEL", "claude-haiku-4-5"))
+    claude_ocr_model: str = field(default_factory=lambda: os.environ.get("FITIH_CLAUDE_OCR_MODEL", "claude-sonnet-5"))
+
+    # Semantic search for RAG: "gemini" (gemini-embedding-001) or "none" (keyword search only).
+    embeddings: str = field(default_factory=lambda: os.environ.get("FITIH_EMBEDDINGS", "gemini").lower())
+    embedding_model: str = field(default_factory=lambda: os.environ.get("FITIH_EMBEDDING_MODEL", "gemini-embedding-001"))
+    embedding_dim: int = field(default_factory=lambda: _int("FITIH_EMBEDDING_DIM", 768))
 
     db_path: Path = field(default_factory=lambda: Path(os.environ.get("FITIH_DB", str(ROOT / "data" / "fitihai.db"))))
     corpus_dir: Path = field(default_factory=lambda: Path(os.environ.get("FITIH_CORPUS_DIR", str(ROOT / "corpus" / "laws"))))
