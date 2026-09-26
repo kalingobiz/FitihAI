@@ -14,7 +14,7 @@ Amharic · Afaan Oromo · Tigrinya · English — on Telegram and the web.
 - 🔒 **Privacy:** documents and conversations are never written to disk. Sessions
   expire after 30 minutes.
 
-📑 Docs: [Proposal review](docs/PROPOSAL_REVIEW.md) · [Revised proposal (v2)](docs/PROPOSAL_v2.md) · [Corpus format](corpus/laws/README.md)
+📑 Docs: [Module documentation](docs/modules/README.md) · [Proposal review](docs/PROPOSAL_REVIEW.md) · [Revised proposal (v2)](docs/PROPOSAL_v2.md) · [Corpus format](corpus/laws/README.md)
 
 ## Quick start
 
