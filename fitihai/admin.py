@@ -11,10 +11,12 @@ Safety rules enforced here, not just in the UI:
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 import re
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Callable
 
@@ -71,6 +73,7 @@ def _summary(key: str, path: Path) -> dict:
         "proclamation": m.get("proclamation", ""), "jurisdiction": m.get("jurisdiction", "federal"),
         "status": m.get("status", "in_force"), "reviewed_by": m.get("reviewed_by", ""),
         "reviewed_on": m.get("reviewed_on", ""), "source": m.get("source", ""),
+        "text_source": m.get("text_source", ""),
         "article_count": len(law.articles), "issues": numbering_issues(law.articles), "error": "",
     }
 
@@ -113,10 +116,11 @@ def build_admin_router(get_advisor: Callable) -> APIRouter:
 
     @router.post("/import", dependencies=auth)
     async def import_file(
-        file: UploadFile = File(...),
+        file: UploadFile | None = File(None),
+        url: str = Form(""),
         id: str = Form(...), title: str = Form(...), domain: str = Form(...), language: str = Form(...),
         proclamation: str = Form(""), year: str = Form(""), jurisdiction: str = Form("federal"),
-        source: str = Form(""), overwrite: bool = Form(False),
+        source: str = Form(""), overwrite: bool = Form(False), ocr: bool = Form(False),
     ):
         if not LAW_ID_RE.match(id):
             raise HTTPException(400, "Law id: lowercase letters, digits, '-' or '_' (e.g. labour-1156-2019-en).")
@@ -124,28 +128,53 @@ def build_admin_router(get_advisor: Callable) -> APIRouter:
             raise HTTPException(400, f"Domain must be one of: {', '.join(sorted(DOMAINS))}.")
         if language not in LANGUAGES:
             raise HTTPException(400, f"Language must be one of: {', '.join(LANGUAGES)}.")
-        suffix = Path(file.filename or "").suffix.lower()
-        if suffix not in {".pdf", ".txt", ".md"}:
-            raise HTTPException(415, "Upload the gazette as a PDF, or as a .txt/.md text export.")
-        data = await file.read(MAX_IMPORT_MB * 1024 * 1024 + 1)
-        if len(data) > MAX_IMPORT_MB * 1024 * 1024:
-            raise HTTPException(413, f"File too large (max {MAX_IMPORT_MB} MB).")
-        existing = _files(settings().corpus_dir).get(id)
-        out = existing or settings().corpus_dir / f"{id}.md"
+        s = settings()
         meta = {"id": id, "title": title.strip(), "proclamation": proclamation.strip(), "year": year.strip(),
                 "jurisdiction": jurisdiction.strip() or "federal", "domain": domain, "language": language,
                 "source": source.strip()}
+        url = url.strip()
+        if url:
+            # Download from a link (polite: robots.txt, identified User-Agent, cached).
+            from .corpus.fetcher import FetchError, Fetcher
+
+            fetcher = Fetcher(s.fetch_delay_seconds, contact=s.fetch_contact, cache_dir=s.download_cache_dir)
+            try:
+                data, _ = await run_in_threadpool(fetcher.get, url)
+            except FetchError as exc:
+                raise HTTPException(422, f"Download failed: {exc}")
+            if data[:5] != b"%PDF-":
+                raise HTTPException(422, "The link did not return a PDF. Link to the PDF file itself.")
+            suffix = ".pdf"
+            meta["source"] = meta["source"] or url
+            meta["source_sha256"] = hashlib.sha256(data).hexdigest()
+            meta["fetched_on"] = date.today().isoformat()
+        elif file is not None:
+            suffix = Path(file.filename or "").suffix.lower()
+            if suffix not in {".pdf", ".txt", ".md"}:
+                raise HTTPException(415, "Upload the gazette as a PDF, or as a .txt/.md text export.")
+            data = await file.read(MAX_IMPORT_MB * 1024 * 1024 + 1)
+            if len(data) > MAX_IMPORT_MB * 1024 * 1024:
+                raise HTTPException(413, f"File too large (max {MAX_IMPORT_MB} MB).")
+        else:
+            raise HTTPException(400, "Choose a file or give a link to the gazette PDF.")
+        existing = _files(s.corpus_dir).get(id)
+        out = existing or s.corpus_dir / f"{id}.md"
+        ocr_fn = get_advisor().model.transcribe if ocr else None
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / f"upload{suffix}"
             src.write_bytes(data)
             try:
-                count, issues = await run_in_threadpool(import_law, src, out, meta, overwrite)
+                count, issues = await run_in_threadpool(import_law, src, out, meta, overwrite, ocr_fn)
             except FileExistsError:
                 raise HTTPException(409, f"A law with id {id!r} already exists. Tick 'replace' to overwrite it.")
             except ValueError as exc:
                 raise HTTPException(422, str(exc))
+            except Exception as exc:  # OCR provider failure
+                log.warning("import of %s failed", id, exc_info=True)
+                raise HTTPException(502, f"Import failed while reading the scan: {exc.__class__.__name__}. Try again.")
         log.info("imported %s (%d articles) as draft", id, count)
-        return {"id": id, "article_count": count, "issues": issues, "status": "draft"}
+        text_source = parse_front_matter(out.read_text(encoding="utf-8"))[0].get("text_source", "")
+        return {"id": id, "article_count": count, "issues": issues, "status": "draft", "text_source": text_source}
 
     @router.get("/laws/{law_id}", dependencies=auth)
     def get_law(law_id: str):

@@ -12,9 +12,16 @@ becomes its own corpus file.
 
 from __future__ import annotations
 
+import io
 import re
 from datetime import date
 from pathlib import Path
+from typing import Callable
+
+# OCR function: (file bytes, media type) -> transcribed text. The AI providers'
+# ``transcribe`` method has this shape.
+OcrFn = Callable[[bytes, str], str]
+OCR_PAGES_PER_CALL = 4
 
 from .chunker import numbering_issues, parse_front_matter, parse_law
 
@@ -33,22 +40,52 @@ _NOISE = [
 
 FRONT_MATTER_ORDER = [
     "id", "title", "proclamation", "year", "jurisdiction", "domain", "language",
-    "source", "status", "reviewed_by", "reviewed_on",
+    "source", "source_sha256", "fetched_on", "text_source", "status", "reviewed_by", "reviewed_on",
 ]
 
 
-def extract_text(path: Path) -> str:
-    """Read a .pdf (text layer required; scanned images need OCR first) or .txt file."""
-    if path.suffix.lower() == ".pdf":
-        try:
-            from pdfminer.high_level import extract_text as pdf_text
-        except ImportError as exc:  # pragma: no cover - listed in requirements.txt
-            raise RuntimeError("PDF import needs `pip install pdfminer.six`") from exc
-        text = pdf_text(str(path))
-        if len(text.strip()) < 200:
-            raise ValueError(f"{path.name} has little or no text layer; it is probably a scan. OCR it first.")
-        return text
-    return path.read_text(encoding="utf-8")
+def _pdf_chunks(data: bytes, pages_per_chunk: int) -> list[bytes]:
+    """Split a PDF into small PDFs of a few pages each, so OCR output stays within limits."""
+    try:
+        from pypdf import PdfReader, PdfWriter
+    except ImportError:  # pragma: no cover - listed in requirements.txt
+        return [data]
+    reader = PdfReader(io.BytesIO(data))
+    chunks = []
+    for start in range(0, len(reader.pages), pages_per_chunk):
+        writer = PdfWriter()
+        for page in reader.pages[start : start + pages_per_chunk]:
+            writer.add_page(page)
+        buf = io.BytesIO()
+        writer.write(buf)
+        chunks.append(buf.getvalue())
+    return chunks or [data]
+
+
+def extract_text_with_source(path: Path, ocr: OcrFn | None = None) -> tuple[str, str]:
+    """Return (text, how it was obtained: 'pdf_text', 'ocr' or 'text_file')."""
+    if path.suffix.lower() != ".pdf":
+        return path.read_text(encoding="utf-8"), "text_file"
+    try:
+        from pdfminer.high_level import extract_text as pdf_text
+    except ImportError as exc:  # pragma: no cover - listed in requirements.txt
+        raise RuntimeError("PDF import needs `pip install pdfminer.six`") from exc
+    text = pdf_text(str(path))
+    if len(text.strip()) >= 200:
+        return text, "pdf_text"
+    if ocr is None:
+        raise ValueError(f"{path.name} has little or no text layer; it is probably a scan. "
+                         "Import it with OCR (--ocr) or OCR it first.")
+    parts = [ocr(chunk, "application/pdf") for chunk in _pdf_chunks(path.read_bytes(), OCR_PAGES_PER_CALL)]
+    text = "\n".join(p.strip() for p in parts if p and p.strip())
+    if len(text.strip()) < 200:
+        raise ValueError(f"OCR found almost no text in {path.name}; check that it is the right file.")
+    return text, "ocr"
+
+
+def extract_text(path: Path, ocr: OcrFn | None = None) -> str:
+    """Read a .pdf (text layer, or OCR when ``ocr`` is given) or a .txt/.md file."""
+    return extract_text_with_source(path, ocr)[0]
 
 
 def _script_share(line: str) -> tuple[float, float]:
@@ -92,15 +129,19 @@ def render(meta: dict[str, str], body: str) -> str:
     return f"---\n{header}\n---\n{body.lstrip()}"
 
 
-def import_law(src: Path, out: Path, meta: dict[str, str], overwrite: bool = False) -> tuple[int, list[str]]:
+def import_law(src: Path, out: Path, meta: dict[str, str], overwrite: bool = False,
+               ocr: OcrFn | None = None) -> tuple[int, list[str]]:
     """Write a draft corpus file from ``src``.
 
     Returns the number of articles found and a list of numbering issues for the reviewer.
+    Scanned PDFs are transcribed with ``ocr`` when given; the file then records
+    ``text_source: ocr`` so the reviewer knows to check it closely.
     """
     if out.exists() and not overwrite:
         raise FileExistsError(f"{out} exists; pass --overwrite to replace it")
-    body = clean_gazette_text(extract_text(src), meta.get("language"))
-    meta = {**meta, "status": "draft"}
+    text, text_source = extract_text_with_source(src, ocr)
+    body = clean_gazette_text(text, meta.get("language"))
+    meta = {**meta, "text_source": text_source, "status": "draft"}
     content = render(meta, body)
     law = parse_law(content)  # validates front matter and article headings
     out.parent.mkdir(parents=True, exist_ok=True)

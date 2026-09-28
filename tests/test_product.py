@@ -155,7 +155,8 @@ def test_admin_full_workflow(admin):
     client, adv, corpus = admin
     r = _import(client)
     assert r.status_code == 200, r.text
-    assert r.json() == {"id": "admin-test-en", "article_count": 2, "issues": [], "status": "draft"}
+    assert r.json() == {"id": "admin-test-en", "article_count": 2, "issues": [], "status": "draft",
+                        "text_source": "text_file"}
     assert _import(client).status_code == 409                       # no silent overwrite
     assert _import(client, overwrite="true").status_code == 200
 
@@ -213,6 +214,11 @@ def test_admin_validates_input(admin):
     assert _import(client, law_id="Bad Id").status_code == 400
     assert _import(client, domain="astrology").status_code == 400
     assert _import(client, language="fr").status_code == 400
+    no_input = client.post("/api/admin/import", data={"id": "x-law", "title": "t", "domain": "labor", "language": "en"})
+    assert no_input.status_code == 400
+    bad_link = client.post("/api/admin/import", data={"id": "x-law", "title": "t", "domain": "labor", "language": "en",
+                                                      "url": "file:///etc/passwd"})
+    assert bad_link.status_code == 422 and "Download failed" in bad_link.json()["detail"]
     bad_type = client.post("/api/admin/import", data={"id": "x-law", "title": "t", "domain": "labor", "language": "en"},
                            files={"file": ("x.exe", b"MZ", "application/octet-stream")})
     assert bad_type.status_code == 415
@@ -324,3 +330,27 @@ def test_app_works_without_ai_key(tmp_path, monkeypatch):
     assert c.get("/api/laws").status_code == 200
     assert c.get("/api/admin/laws", headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 200
     assert c.post("/api/ask", json={"question": "anything"}).status_code == 502   # clear error, no crash
+
+
+def test_admin_import_scanned_pdf_with_ocr(admin):
+    import io
+    from pypdf import PdfWriter
+
+    client, adv, _ = admin
+    w = PdfWriter()
+    for _ in range(2):
+        w.add_blank_page(width=612, height=842)
+    buf = io.BytesIO()
+    w.write(buf)
+    scan = buf.getvalue()
+    adv.model.transcribe = lambda data, media_type: (
+        "Article 1. Short Title\nThis FICTIONAL scanned Proclamation may be cited as the Admin OCR Test.\n"
+        "Article 2. Wages\nWages shall be paid in cash or by bank transfer on the day agreed in the contract, "
+        "and the employer shall give the worker a written statement of each payment.\n")
+    form = {"id": "admin-ocr-en", "title": "FICTIONAL OCR Test", "domain": "labor", "language": "en"}
+    without = client.post("/api/admin/import", data=form, files={"file": ("scan.pdf", scan, "application/pdf")})
+    assert without.status_code == 422 and "OCR" in without.json()["detail"]
+    r = client.post("/api/admin/import", data={**form, "ocr": "true"}, files={"file": ("scan.pdf", scan, "application/pdf")})
+    assert r.status_code == 200, r.text
+    assert r.json()["text_source"] == "ocr" and r.json()["article_count"] == 2
+    assert client.get("/api/admin/laws/admin-ocr-en").json()["text_source"] == "ocr"

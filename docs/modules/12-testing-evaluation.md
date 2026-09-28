@@ -23,6 +23,7 @@ datasets, metrics, targets, and the process.
 | `tests/fixtures/*.md` | Two **fictional** laws (English labour, Amharic land lease) |
 | `pytest.ini` | Test paths and import path |
 | `.github/workflows/ci.yml` | CI: `pytest` on Python 3.11 and 3.12 for each PR and push to `main` (no API keys needed) |
+| `tests/test_fetcher.py` | Web downloader against a local test web server |
 | `tests/test_importer.py` | Gazette importer, cross-references, numbering checks, approve |
 | `tests/test_product.py` | Admin console, rate limits, quotas, consent/privacy, Ethiopian time, auto-reload, Telegram formatting, evaluation, running without an AI key |
 | `fitihai/evaluation.py` | Evaluation metrics, report, lawyer grading sheet |
@@ -35,7 +36,7 @@ pytest            # all tests (about 1 second)
 pytest -k gemini  # a subset
 ```
 
-**Automated test coverage (64 tests)**
+**Automated test coverage (73 tests)**
 | Area | Tests |
 |---|---|
 | Corpus (01) | Ge'ez numerals; English and Amharic headings; front-matter validation; ingest counts |
@@ -47,7 +48,8 @@ pytest -k gemini  # a subset
 | Languages (07) | Disclaimer exists for every language; correct language per response |
 | API (09) | Ask; analyse text; bad file type; health; index page; rate limit; web quota per client; consent and privacy pages |
 | Admin (01, 09) | Disabled without token; wrong token; full import → approve → publish → edit → repeal workflow; delete and prune; input validation |
-| Importer (01) | Gazette cleaning; drafts not searchable; approval; real PDF; scanned PDF rejected; cross-references; numbering |
+| Importer (01) | Gazette cleaning; drafts not searchable; approval; real PDF; scanned PDF rejected; cross-references; numbering; OCR fallback in page batches |
+| Downloader (01) | PDF link discovery; robots.txt; import as drafts; OCR for scans; per-source failures; caching; sources list; CLI; admin link and OCR import |
 | Telegram (10) | Escaping; analysis formatting with times; message splitting order |
 | Evaluation (12) | Metrics on the example datasets; report and grading sheet; errors recorded, not skipped |
 | Operations (11) | Web/bot index reload after publish; app works without an AI key |
@@ -113,7 +115,7 @@ Tests fail loudly with pytest output. Evaluation scripts should record errors
 (provider failures, refusals) as their own category, not silently skip them.
 
 ## 9. Testing
-This module *is* the testing strategy. The suite currently passes: 64 tests in about 2 seconds.
+This module *is* the testing strategy. The suite currently passes: 73 tests in about 2 seconds.
 
 ## 10. Limitations and next steps
 - **No live-API test has been run yet.** First step: one question and one document

@@ -2,6 +2,7 @@ google-genai>=1.30        # Gemini: default AI provider + embeddings
 anthropic>=1.8,<2         # Claude: optional provider (FITIH_LLM_PROVIDER=claude)
 numpy>=1.26
 pdfminer.six>=20231228  # gazette PDF import (fitihai.cli import)
+pypdf>=4.0               # splits scanned gazettes into page batches for OCR
 fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9

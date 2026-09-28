@@ -64,6 +64,12 @@ class Settings:
 
     telegram_token: str = field(default_factory=lambda: os.environ.get("TELEGRAM_BOT_TOKEN", ""))
 
+    # Law downloader (fitihai.cli fetch): seconds between requests to one site, and a contact
+    # (email or URL) included in the User-Agent so site owners can reach you.
+    fetch_delay_seconds: float = field(default_factory=lambda: float(os.environ.get("FITIH_FETCH_DELAY", "2") or 2))
+    fetch_contact: str = field(default_factory=lambda: os.environ.get("FITIH_FETCH_CONTACT", ""))
+    download_cache_dir: Path = field(default_factory=lambda: Path(os.environ.get("FITIH_DOWNLOAD_CACHE", str(ROOT / "data" / "downloads"))))
+
     # Admin console (/admin). Empty = admin console disabled.
     admin_token: str = field(default_factory=lambda: os.environ.get("FITIH_ADMIN_TOKEN", ""))
     # Requests per minute per client for /api/ask and /api/analyze. 0 = no limit.

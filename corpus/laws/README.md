@@ -13,10 +13,39 @@ text of Ethiopian law. Do not paste summaries, blog posts or AI-generated text h
 Use the Negarit Gazeta (federal) or the regional gazette, and have a licensed
 lawyer check each file before it goes live.
 
+## Collecting laws from the web (many at once)
+
+Most Ethiopian laws are online as Negarit Gazette PDFs, usually scans. The downloader
+collects them and imports each one as a **draft**:
+
+```bash
+# 1. List the PDF links on a website's proclamations page, as a sources spreadsheet
+python -m fitihai.cli discover https://<law-site>/proclamations --out corpus/sources/new.csv
+
+# 2. Complete the spreadsheet (id, title, proclamation, domain, language for each row)
+#    or fill in the url column of the ready-made list: corpus/sources/federal-core.csv
+
+# 3. Download and import as drafts (--ocr reads scanned PDFs with the AI service)
+python -m fitihai.cli fetch corpus/sources/federal-core.csv --ocr
+```
+
+The downloader:
+- obeys each site's robots.txt, waits `FITIH_FETCH_DELAY` seconds between requests to one site, and identifies itself;
+- caches every download in `data/downloads/`, so nothing is fetched twice;
+- records the link, the file's SHA-256 fingerprint and the date in each law file (`source`, `source_sha256`, `fetched_on`), plus `text_source: ocr` when the text came from a scan;
+- prints a line per law: imported, already in the library, failed (with the reason) or no link yet. One failure never stops the run.
+
+Downloaded text is **not** approved text. Websites often carry unofficial retyped
+copies, and OCR misreads letters and numbers. Review every draft against the gazette,
+especially amounts, time limits and article numbers, before approving it. Prefer the
+official sources (House of Peoples' Representatives, the Negarit Gazette). Laws and
+official texts are generally not protected by Ethiopian copyright (confirm with your
+lawyer), but respect each website's terms of use.
+
 ## Adding a law in the browser (easiest)
 
 Open **`/admin`** on the running app and sign in with `FITIH_ADMIN_TOKEN`. Then:
-**Import** the gazette PDF → **Review** (fix any extraction errors; numbering gaps are
+**Import** the gazette PDF, or paste a link to it (tick **OCR** for scanned PDFs) → **Review** (fix any extraction errors; numbering gaps are
 listed) → **Approve** (the reviewing lawyer's name) → **Publish changes**. The web app and
 the Telegram bot use the law within 15 seconds.
 

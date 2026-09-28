@@ -47,7 +47,8 @@ async function refresh() {
   tbody.replaceChildren(...data.laws.map((l) => el("tr", {},
     el("td", {}, el("strong", {}, l.title || l.file), el("div", { class: "muted small" }, l.id, l.proclamation ? ` · ${l.proclamation}` : "")),
     el("td", {}, l.language || "—"),
-    el("td", {}, badge(l.status), l.reviewed_by ? el("div", { class: "muted small" }, `${l.reviewed_by}, ${l.reviewed_on}`) : null),
+    el("td", {}, badge(l.status), l.text_source === "ocr" ? el("span", { class: "badge draft", title: "Text was read by OCR" }, "OCR") : null,
+      l.reviewed_by ? el("div", { class: "muted small" }, `${l.reviewed_by}, ${l.reviewed_on}`) : null),
     el("td", {}, l.article_count),
     el("td", {}, l.error ? el("span", { class: "bad" }, "parse error") : l.issues.length ? el("span", { class: "warn-text" }, `${l.issues.length} to check`) : "✓"),
     el("td", {}, l.published ? "✓" : el("span", { class: "muted", title: "Press Publish changes" }, "pending")),
@@ -64,7 +65,11 @@ async function openLaw(id) {
   $("#rv-meta").textContent = [law.id, law.proclamation && `Proclamation ${law.proclamation}`, law.language, law.domain,
     law.jurisdiction, law.source && `Source: ${law.source}`, law.reviewed_by && `Approved by ${law.reviewed_by} on ${law.reviewed_on}`]
     .filter(Boolean).join(" · ");
-  $("#rv-issues").replaceChildren(law.issues.length
+  const ocrNote = law.text_source === "ocr"
+    ? el("div", { class: "notice" }, el("strong", {}, "This text was read from a scan by OCR. "),
+        "OCR can misread letters, numbers and Ge'ez characters. Check every amount, time limit and article number against the gazette.")
+    : null;
+  $("#rv-issues").replaceChildren(ocrNote || "", law.issues.length
     ? el("div", { class: "notice" }, el("strong", {}, "Check these places first (possible extraction errors):"),
         el("ul", {}, law.issues.map((i) => el("li", {}, i))))
     : el("p", { class: "small ok-text" }, "Article numbering is continuous."));
@@ -158,8 +163,15 @@ $("#import-form").addEventListener("submit", async (e) => {
   btn.disabled = true; btn.textContent = "Importing…";
   const data = new FormData(form);
   if (!data.get("overwrite")) data.set("overwrite", "false");
+  if (!data.get("ocr")) data.set("ocr", "false");
+  const file = data.get("file");
+  if ((!file || !file.size) && !data.get("url")) {
+    btn.disabled = false; btn.textContent = "Import as draft";
+    return toast("Choose a file or paste a link to the PDF.", "bad");
+  }
+  if (!file || !file.size) data.delete("file");
   const r = await action(() => api("/import", { method: "POST", body: data }),
-    (r) => `Imported ${r.article_count} articles as a draft.${r.issues.length ? ` ${r.issues.length} place(s) to check.` : ""}`);
+    (r) => `Imported ${r.article_count} articles as a draft${r.text_source === "ocr" ? " (from OCR)" : ""}.${r.issues.length ? ` ${r.issues.length} place(s) to check.` : ""}`);
   btn.disabled = false; btn.textContent = "Import as draft";
   if (r) { form.reset(); openLaw(r.id); }
 });

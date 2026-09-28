@@ -1,0 +1,42 @@
+# Layer-1 sources list for `python -m fitihai.cli fetch corpus/sources/federal-core.csv`
+#
+# Fill in `url` with a DIRECT link to the gazette PDF for each law and language
+# (use `python -m fitihai.cli discover <page>` to list the PDF links on a website).
+# Prefer official sources (House of Peoples' Representatives, Federal Negarit Gazette);
+# record the gazette issue and pages in `source` if the link is not the official site.
+#
+# Proclamation numbers below come from the revised proposal and MUST be verified
+# against the Negarit Gazeta. Bilingual gazettes contain both languages: point the
+# -am and -en rows at the same PDF; the importer keeps one language per file.
+# Rows without a url are skipped. Everything is imported as a DRAFT for lawyer review.
+id,title,proclamation,year,domain,language,jurisdiction,url,source
+labour-1156-2019-am,Labour Proclamation,1156/2019,2019,labor,am,federal,,
+labour-1156-2019-en,Labour Proclamation,1156/2019,2019,labor,en,federal,,
+civil-code-1960-am,Civil Code,165/1960,1960,other,am,federal,,
+civil-code-1960-en,Civil Code,165/1960,1960,other,en,federal,,
+civil-procedure-code-1965-am,Civil Procedure Code,Decree 52/1965,1965,civil_procedure,am,federal,,
+civil-procedure-code-1965-en,Civil Procedure Code,Decree 52/1965,1965,civil_procedure,en,federal,,
+criminal-code-414-2004-am,Criminal Code,414/2004,2004,criminal,am,federal,,
+criminal-code-414-2004-en,Criminal Code,414/2004,2004,criminal,en,federal,,
+criminal-procedure-code-1961-am,Criminal Procedure Code,185/1961,1961,criminal,am,federal,,
+criminal-procedure-code-1961-en,Criminal Procedure Code,185/1961,1961,criminal,en,federal,,
+urban-land-lease-721-2011-am,Urban Lands Lease Holding Proclamation,721/2011,2011,land,am,federal,,
+urban-land-lease-721-2011-en,Urban Lands Lease Holding Proclamation,721/2011,2011,land,en,federal,,
+rural-land-456-2005-am,Rural Land Administration and Land Use Proclamation,456/2005,2005,land,am,federal,,
+rural-land-456-2005-en,Rural Land Administration and Land Use Proclamation,456/2005,2005,land,en,federal,,
+expropriation-1161-2019-am,Expropriation of Landholdings for Public Purposes Proclamation,1161/2019,2019,land,am,federal,,
+expropriation-1161-2019-en,Expropriation of Landholdings for Public Purposes Proclamation,1161/2019,2019,land,en,federal,,
+revised-family-code-213-2000-am,Revised Family Code,213/2000,2000,family,am,federal,,
+revised-family-code-213-2000-en,Revised Family Code,213/2000,2000,family,en,federal,,
+commercial-code-1243-2021-am,Commercial Code,1243/2021,2021,commercial,am,federal,,
+commercial-code-1243-2021-en,Commercial Code,1243/2021,2021,commercial,en,federal,,
+investment-1180-2020-am,Investment Proclamation,1180/2020,2020,commercial,am,federal,,
+investment-1180-2020-en,Investment Proclamation,1180/2020,2020,commercial,en,federal,,
+income-tax-979-2016-am,Federal Income Tax Proclamation,979/2016,2016,tax,am,federal,,
+income-tax-979-2016-en,Federal Income Tax Proclamation,979/2016,2016,tax,en,federal,,
+tax-administration-983-2016-am,Federal Tax Administration Proclamation,983/2016,2016,tax,am,federal,,
+tax-administration-983-2016-en,Federal Tax Administration Proclamation,983/2016,2016,tax,en,federal,,
+personal-data-protection-1321-2024-am,Personal Data Protection Proclamation,1321/2024,2024,administrative,am,federal,,
+personal-data-protection-1321-2024-en,Personal Data Protection Proclamation,1321/2024,2024,administrative,en,federal,,
+dire-dawa-charter-416-2004-am,Dire Dawa Administration Charter Proclamation,416/2004,2004,administrative,am,dire_dawa,,
+dire-dawa-charter-416-2004-en,Dire Dawa Administration Charter Proclamation,416/2004,2004,administrative,en,dire_dawa,,

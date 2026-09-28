@@ -14,6 +14,7 @@ services:
       - "8000:8000"
     volumes:
       - ./corpus/laws:/app/corpus/laws      # law files live on the host: back them up / commit them to git
+      - ./corpus/sources:/app/corpus/sources  # sources lists for `fitihai.cli fetch`, edited on the host
       - fitih-data:/app/data                # search index + embedding cache + anonymous usage counters
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]

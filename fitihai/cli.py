@@ -5,6 +5,8 @@
     python -m fitihai.cli import gazette.pdf --id labour-1156-2019-en --title "Labour Proclamation" \
         --proclamation 1156/2019 --year 2019 --domain labor --language en --source "..."
     python -m fitihai.cli approve corpus/laws/labour-1156-2019-en.md --by "Reviewer name"
+    python -m fitihai.cli discover https://example.org/proclamations --out corpus/sources/new.csv
+    python -m fitihai.cli fetch corpus/sources/federal-core.csv [--ocr]
     python -m fitihai.cli laws
     python -m fitihai.cli search "severance pay after dismissal"
     python -m fitihai.cli ask "..." --lang am
@@ -59,6 +61,15 @@ def main(argv: list[str] | None = None) -> int:
     p_approve = sub.add_parser("approve", help="mark a reviewed corpus file as in force")
     p_approve.add_argument("path")
     p_approve.add_argument("--by", required=True, help="name of the reviewing lawyer")
+    p_disc = sub.add_parser("discover", help="list the PDF links on a web page (to build a sources list)")
+    p_disc.add_argument("url")
+    p_disc.add_argument("--match", help="regex on link URL or text instead of '.pdf' links")
+    p_disc.add_argument("--out", help="write a sources CSV skeleton to this file")
+    p_fetch = sub.add_parser("fetch", help="download the PDFs in a sources CSV and import them as DRAFTS")
+    p_fetch.add_argument("sources", help="CSV: id,title,proclamation,year,domain,language,jurisdiction,url,source")
+    p_fetch.add_argument("--ocr", action="store_true", help="OCR scanned PDFs with the AI provider")
+    p_fetch.add_argument("--overwrite", action="store_true", help="replace laws already in the library")
+    p_fetch.add_argument("--only", nargs="*", help="fetch only these ids")
     sub.add_parser("laws", help="list ingested laws")
     p_search = sub.add_parser("search", help="test retrieval without calling the AI")
     p_search.add_argument("query")
@@ -72,8 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     p_eval.add_argument("--label", default="", help="short name for this run, e.g. the model")
     args = parser.parse_args(argv)
 
-    # import/approve only edit corpus files; everything else needs the database.
-    store = CorpusStore(settings.db_path) if args.cmd not in ("import", "approve") else None
+    # These commands only touch files; everything else needs the database.
+    store = CorpusStore(settings.db_path) if args.cmd not in ("import", "approve", "discover", "fetch") else None
     if args.cmd == "ingest":
         directory = Path(args.directory)
         # Loading the main corpus folder mirrors it exactly (laws whose file was deleted are removed).
@@ -106,6 +117,39 @@ def main(argv: list[str] | None = None) -> int:
         meta = approve(Path(args.path), args.by)
         print(f"Approved {meta['id']} (reviewed by {meta['reviewed_by']} on {meta['reviewed_on']}). "
               "Run `ingest --embed` to make it searchable.")
+    elif args.cmd in ("discover", "fetch"):
+        from .corpus.fetcher import Fetcher, discover, fetch_sources, read_sources, write_sources_skeleton
+
+        fetcher = Fetcher(settings.fetch_delay_seconds, contact=settings.fetch_contact,
+                          cache_dir=settings.download_cache_dir)
+        if args.cmd == "discover":
+            links = discover(fetcher, args.url, args.match)
+            for url, text in links:
+                print(f"{url}\t{text}")
+            print(f"{len(links)} link(s) found.")
+            if args.out:
+                write_sources_skeleton(links, Path(args.out))
+                print(f"Wrote {args.out}: fill in id, domain and language for each law you want, then run fetch.")
+        else:
+            rows = read_sources(Path(args.sources))
+            if args.only:
+                rows = [r for r in rows if r.get("id") in set(args.only)]
+            ocr = None
+            if args.ocr:
+                from .llm import build_model
+
+                ocr = build_model(settings).transcribe
+            results = fetch_sources(rows, settings.corpus_dir, fetcher, ocr=ocr, overwrite=args.overwrite)
+            for r in results:
+                detail = f"{r.articles} articles ({r.text_source})" if r.status == "imported" else r.message
+                print(f"  {r.status:<9} {r.id:<40} {detail}")
+                for issue in r.issues[:5]:
+                    print(f"            check: {issue}")
+            imported = sum(r.status == "imported" for r in results)
+            print(f"{imported} imported as draft, {sum(r.status == 'failed' for r in results)} failed, "
+                  f"{sum(r.status in ('no-url', 'exists', 'invalid') for r in results)} skipped.")
+            if imported:
+                print("Next: review each draft in /admin (or corpus/laws/), approve, then publish.")
     elif args.cmd == "laws":
         for law in store.list_laws():
             print(f"{law['id']:<32} {law['domain']:<16} {law['status']:<9} {law['article_count']:>5} arts  "

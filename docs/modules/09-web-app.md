@@ -42,7 +42,7 @@ upload, analysis view, language switch, print/save).
 | Method and path | Purpose |
 |---|---|
 | `GET /api/admin/laws` | Every law file: status, reviewer, article count, numbering checks, whether it is live |
-| `POST /api/admin/import` | multipart `file` + `id, title, domain, language, proclamation, year, jurisdiction, source, overwrite` → draft |
+| `POST /api/admin/import` | multipart `file` **or** `url` (downloaded politely), + `id, title, domain, language, proclamation, year, jurisdiction, source, overwrite, ocr` → draft |
 | `GET /api/admin/laws/{id}` | Full text, article list, checks |
 | `PUT /api/admin/laws/{id}` | Save edited text (validated; resets to draft) |
 | `POST /api/admin/laws/{id}/approve` | `{reviewer}` → in force |

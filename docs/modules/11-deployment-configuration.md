@@ -47,6 +47,9 @@ checks, and secrets.
 | `FITIH_USAGE_SALT` | `change-me` | 08 |
 | `TELEGRAM_BOT_TOKEN` | — | 10 |
 | `FITIH_ADMIN_TOKEN` | — (admin disabled) | 01, 09 |
+| `FITIH_FETCH_DELAY` | `2` | 01 |
+| `FITIH_FETCH_CONTACT` | — | 01 |
+| `FITIH_DOWNLOAD_CACHE` | `data/downloads` | 01 |
 | `FITIH_RATE_LIMIT_PER_MINUTE` | `20` | 08 |
 | `FITIH_TRUST_PROXY` | `0` | 08 |
 
@@ -139,7 +142,7 @@ imported and approved through the admin API and then published, a container rest
 (the law was still live, loaded from the host folder), and a clean HTTP 502 for
 questions without an AI key.
 
-Run `pytest` before every deploy (64 tests at the time of writing). CI runs the same tests on every pull request. After deploying,
+Run `pytest` before every deploy (73 tests at the time of writing). CI runs the same tests on every pull request. After deploying,
 check `GET /api/health`, ask one question, and upload one test document.
 
 ## 10. Limitations and next steps

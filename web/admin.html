@@ -82,10 +82,11 @@
 
       <section class="card">
         <h2>Import a law</h2>
-        <p class="small muted">Upload the official Negarit Gazette PDF (with a text layer) or a text export.
+        <p class="small muted">Upload the official Negarit Gazette PDF, or paste a link to it. Most gazettes online are scans: tick OCR for those.
           Bilingual gazettes: import once per language (e.g. <code>…-am</code> and <code>…-en</code>).</p>
         <form id="import-form" class="grid">
-          <label class="span2">Gazette file (PDF, .txt or .md)<input type="file" name="file" accept=".pdf,.txt,.md" required></label>
+          <label>Gazette file (PDF, .txt or .md)<input type="file" name="file" accept=".pdf,.txt,.md"></label>
+          <label>…or a link to the PDF<input name="url" type="url" placeholder="https://…/proclamation.pdf"></label>
           <label>Law id<input name="id" required pattern="[a-z0-9][a-z0-9_\-]{1,80}" placeholder="labour-1156-2019-en"></label>
           <label>Title<input name="title" required placeholder="Labour Proclamation"></label>
           <label>Proclamation no.<input name="proclamation" placeholder="1156/2019"></label>
@@ -101,6 +102,7 @@
             <option value="om">Afaan Oromoo</option><option value="ti">ትግርኛ</option></select></label>
           <label>Jurisdiction<input name="jurisdiction" value="federal"></label>
           <label>Source<input name="source" placeholder="Federal Negarit Gazette, year/no., pages"></label>
+          <label class="check span2"><input type="checkbox" name="ocr" value="true"> Scanned PDF: read it with OCR (uses the AI service; check the text carefully)</label>
           <label class="check span2"><input type="checkbox" name="overwrite" value="true"> Replace an existing law with the same id</label>
           <button class="primary span2" type="submit">Import as draft</button>
         </form>

@@ -25,8 +25,9 @@ cp .env.example .env
 docker compose up -d
 docker compose --profile telegram up -d        # also start the Telegram bot
 
-# 3. Load the law: open http://localhost:8000/admin, sign in with FITIH_ADMIN_TOKEN, then
-#    Import (gazette PDF) → Review → Approve (licensed lawyer) → Publish changes
+# 3. Load the law: collect the gazette PDFs (fill the url column first), then review in the browser
+docker compose exec web python -m fitihai.cli fetch corpus/sources/federal-core.csv --ocr
+#    open http://localhost:8000/admin → Review → Approve (licensed lawyer) → Publish changes
 
 # 4. Check accuracy (see eval/README.md)
 docker compose exec web python -m fitihai.cli eval eval/datasets/qa.jsonl
@@ -54,7 +55,8 @@ pytest                                  # tests: no API keys needed
 
 | In the browser (`/admin`) | On the command line |
 |---|---|
-| **Import**: upload the gazette PDF, choose the language | `python -m fitihai.cli import gazette.pdf --id labour-1156-2019-en --title "Labour Proclamation" --domain labor --language en` |
+| — | **Collect many at once:** `python -m fitihai.cli fetch corpus/sources/federal-core.csv --ocr` downloads the gazette PDFs in a sources list (robots.txt-respecting, cached) and imports them as drafts. `discover <page>` builds a list from a website |
+| **Import**: upload the gazette PDF or paste a link; tick OCR for scans | `python -m fitihai.cli import gazette.pdf --id labour-1156-2019-en --title "Labour Proclamation" --domain labor --language en` |
 | **Review**: numbering checks, article list, editable text | edit `corpus/laws/<id>.md` |
 | **Approve**: reviewer name + confirmation | `python -m fitihai.cli approve corpus/laws/<id>.md --by "Name"` |
 | **Publish changes** | `python -m fitihai.cli ingest --embed` |
@@ -102,7 +104,7 @@ question / document
 | `fitihai/admin.py` | Admin console API (import, review, approve, repeal, publish) |
 | `fitihai/llm_gemini.py`, `fitihai/llm.py` | Gemini and Claude providers behind one interface |
 | `fitihai/embeddings.py`, `fitihai/retrieval.py` | Semantic and keyword search, rank fusion |
-| `fitihai/corpus/` | Law file parser, gazette importer, SQLite store |
+| `fitihai/corpus/` | Law file parser, gazette importer (with OCR for scans), web downloader, SQLite store |
 | `fitihai/ethiopian_calendar.py` | E.C. ↔ Gregorian dates, Ethiopian time → 24-hour |
 | `fitihai/evaluation.py` | Evaluation metrics, report and lawyer grading sheet |
 | `fitihai/i18n.py` | Languages, disclaimers, consent text, UI strings |

@@ -25,7 +25,9 @@ the whole system.
 | `fitihai/corpus/chunker.py` | Front-matter parser, article splitter, Ge'ez numeral conversion |
 | `fitihai/admin.py` | Admin console API: the same workflow in the browser (see module 09) |
 | `web/admin.html`, `web/admin.js` | Admin console page (`/admin`) |
-| `fitihai/corpus/importer.py` | Gazette PDF/text → draft corpus file; `approve` records the reviewer |
+| `fitihai/corpus/importer.py` | Gazette PDF/text → draft corpus file (OCR fallback for scans); `approve` records the reviewer |
+| `fitihai/corpus/fetcher.py` | Web downloader: `discover` PDF links on a page; `fetch_sources` downloads a sources list and imports drafts |
+| `corpus/sources/federal-core.csv` | Ready-made sources list of the Layer-1 federal laws (links to be filled in) |
 | `fitihai/corpus/store.py` | `CorpusStore`: SQLite schema, ingest, queries, embedding cache, usage counters |
 | `fitihai/cli.py` | `ingest`, `embed`, `laws`, `search` commands |
 | `corpus/laws/` | Where law files go (ships empty on purpose) |
@@ -108,6 +110,24 @@ processes can share the file. A lock serialises access within a process.
 changes** in the admin console) mirrors the folder exactly: laws whose file was deleted
 are removed from the index.
 
+**Collecting from the web.** `fitihai.cli discover <page>` lists the PDF links on a
+page as a sources spreadsheet (`id,title,proclamation,year,domain,language,jurisdiction,url,source`).
+`fitihai.cli fetch <sources.csv> [--ocr]` then downloads each PDF and imports it as a
+draft. The downloader:
+- obeys robots.txt and waits `FITIH_FETCH_DELAY` seconds between requests to one host;
+- sends a User-Agent with `FITIH_FETCH_CONTACT`, and retries on 429 or 5xx with backoff;
+- limits files to 100 MB, and caches downloads (by URL hash) in `data/downloads/`;
+- rejects links that don't return a PDF;
+- records `source`, `source_sha256` and `fetched_on`;
+- reports each row as imported, exists, no-url, invalid or failed, and one failure never stops the run.
+
+**Scanned gazettes (OCR).** If a PDF has almost no text layer, the importer splits it
+into 4-page PDFs (pypdf) and sends each to the AI provider's `transcribe`, which uses the
+verbatim OCR prompt from module 03. The pieces are joined, cleaned and parsed like any
+other text, and the file records `text_source: ocr`. The admin console flags such
+drafts, and reviewers must check numbers and Ge'ez characters closely. Without OCR,
+a scanned PDF is rejected with a message saying to use `--ocr`.
+
 **Import and review workflow**
 ```
 gazette PDF ─► import (strip page headers/footers and page numbers, keep one language,
@@ -163,15 +183,21 @@ drops lines that are mostly Latin script. Each language becomes its own file.
 `tests/test_importer.py`: header/footer and language cleaning, draft laws are not
 searchable, approval records the reviewer, import from a real (generated) PDF,
 rejection of scanned PDFs, cross-references are not headings, numbering issues,
-and the CLI `import`/`approve` commands.
+and the CLI `import`/`approve` commands. `tests/test_fetcher.py` runs a local web
+server with a text PDF, a scanned 9-page PDF, an HTML page posing as a PDF, a missing
+file and a robots.txt-blocked folder. It covers discovery, robots.txt, drafts not being
+searchable, OCR in 4-page batches, one failure not stopping the run, caching (a
+second run makes no requests), the shipped sources list, and the CLI.
 To check by hand: `python -m fitihai.cli ingest tests/fixtures && python -m fitihai.cli laws`.
 
 ## 10. Limitations and next steps
 - **The corpus is empty.** Phase 1 work: import the Layer-1 federal laws from the
   Negarit Gazeta with `fitihai.cli import`, then do a lawyer QA pass on each law and
   run `approve`.
-- The importer needs a PDF with a text layer. Scanned gazettes must be OCR'd first.
-  The two-column layout may still interleave sentences, which the reviewer must fix.
+- OCR quality on scanned Ge'ez gazettes is unmeasured: benchmark it on a few laws before
+  bulk imports. The two-column layout may interleave sentences, which the reviewer must fix.
+- The downloader is generic (PDF links and a sources list). Site-specific crawlers,
+  for example to follow pagination, can be added once the target sites are chosen.
 - Sub-articles (e.g. Art. 39(1)(b)) are not split out. The whole article is cited.
 - There is no automatic tracking of amendments. An editor must update files when
   the gazette publishes changes. Add an `amended_by` field and a change log.
